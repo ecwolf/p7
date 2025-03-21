@@ -50,6 +50,7 @@ header rec_h {
     bit<32> dest_ip;
     bit<1> signal;
     bit<31> pad;
+    bit<160> routeid;
 }
 
 header vlan_tag_h {
@@ -170,7 +171,6 @@ struct header_t {
     tcp_h tcp;
     udp_h udp;
     rec_h rec;
-
     // Add more headers here.
 }
 
@@ -180,6 +180,8 @@ struct headers {
     vlan_tag_h   vlan_tag;
     arp_h   arp;
     ipv4_h       ipv4;
+    tcp_h       tcp;
+    udp_h       udp;
 }
 
 struct empty_header_t {}
