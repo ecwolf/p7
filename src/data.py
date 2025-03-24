@@ -295,7 +295,7 @@ class generator:
                         self.edge_hosts = len(self.link)
                         self.edge_hosts = self.find_edge_host(self.link)
 
-                generate_bf(self.host, self.vlan_link, self.tableEnt, self.tableinfo, self.sw_ids, self.p4_code, self.mirrorinfo, 
+                generate_bf(self.host, self.vlan_link, self.tableEnt, self.tableinfo, self.sw_ids, self.p4_code, self.mirrorinfo, self.link,
                             self.routing_model, self.route_ids, self.edge_links, self.route_seq, self.link_seq, self.route_dest, self.edge_hosts, self.name_sw, # PolKa
                             self.slice, self.slice_number, self.slice_metric) # Slice
 

@@ -1,5 +1,5 @@
  ################################################################################
- # Copyright 2024 INTRIG
+ # Copyright 2025 INTRIG
  #
  # Licensed under the Apache License, Version 2.0 (the "License");
  # you may not use this file except in compliance with the License.
@@ -14,10 +14,14 @@
  # limitations under the License.
  ################################################################################
 
+import datetime
+
 def generate_p4(rec_port, port_user, name_sw, hosts, links,
 				routing_model, route_ids, dec_s, route_seq, edge_hosts, crc,
 				slice_list, slice_metric):
 	
+	current_year = datetime.datetime.now().year
+
 	if (routing_model == 0):
 		model = "default"
 	if (routing_model == 1):
@@ -33,7 +37,7 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 
 	# License
 	f.write("/*******************************************************************************\n")
-	f.write(" * Copyright 2024 INTRIG\n")
+	f.write(" * Copyright " + str(current_year) + " INTRIG\n")
 	f.write(" *\n")
 	f.write(" * Licensed under the Apache License, Version 2.0 (the \"License\");\n")
 	f.write(" * you may not use this file except in compliance with the License.\n")
@@ -55,7 +59,6 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 	f.write("#include \"common/headers.p4\"\n")
 	f.write("#include \"common/util.p4\"\n")
 	f.write("\n")
-	f.write("\n")
 
 	# Constants and types
 	f.write("/*************************************************************************\n")
@@ -63,23 +66,13 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 	f.write("**************************************************************************/\n")
 	if (len(hosts) > 0):
 		f.write("const vlan_id_t p7_vlan = " + str(hosts[0][6]) + ";        // vlan for P7\n")
-		f.write("const bit<16> total_sw = " + str(len(name_sw)) + ";         // total number of switches\n")
-		for i in range(len(links)):
-			f.write("const bit<10> pkt_loss" + str(i) + " = " + str(hex(int(round(10.2*links[i][3])))) + ";       // packet loss  - " + str(links[i][3]) + "%\n")
 		f.write("const PortId_t rec_port = " + str(rec_port) + ";       // recirculation port\n")
 		f.write("const PortId_t port_user = " + str(port_user) + ";       // recirculation port\n")
-		for i in range(len(links)):
-			f.write("const bit<32> latency" + str(i) + " = " + str(links[i][4]*1000000) + ";   // latency" + str(i) + "  - " + str(links[i][4]*1000000) + " - " + str(links[i][4]) + "ms\n")
 		f.write("const bit<32> constJitter = " + str(links[0][5]*1000000) + ";   // jitter  - " + str(links[0][5]*1000000) + " - " + str(links[0][5]) + "ms\n")
 		f.write("const bit<7> percentTax = " + str(int(links[0][6]*127/100)) + ";   // percent*127/100\n")
 	else:
 		f.write("const vlan_id_t p7_vlan = 9999;        // vlan for P7\n")
-		f.write("const bit<16> total_sw = 0;         // total number of switches\n")
-		for i in range(len(links)):
-			f.write("const bit<10> pkt_loss" + str(i) + " = 0;       // packet loss  - " + str(links[i][3]) + "%\n")
 		f.write("const PortId_t rec_port = 68;       // recirculation port\n")
-		for i in range(len(links)):
-			f.write("const bit<32> latency" + str(i) + " = 0;   // latency" + str(i) + "  - 10000000 - 10ms\n")
 		f.write("const bit<32> constJitter = 0\n")
 		f.write("const bit<7> percentTax = 0\n")
 	f.write("\n")
@@ -99,8 +92,9 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 	f.write("    bit<32>  jitter_metadata;\n")
 	f.write("    bit<1>   signal_metadata;\n")
 	f.write("    bit<31>  padding;\n")
-	f.write("\n")
+	f.write("    bit<16>  R;\n")
 	if (routing_model == 1):
+		f.write("\n")
 		f.write("    // PolKa\n")
 		if (crc == 8):
 			f.write("    bit<152> ndata;\n")
@@ -240,22 +234,34 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 
 	# Register for latency timer
 	f.write("    // Register to validate the latency value\n")
-	for i in range(len(links)):
-		f.write("    Register <bit<32>, _> (32w1)  tscal" + str(i) + ";\n")
+	f.write("    Register <bit<32>, bit<16>> (32w1024)  tscal;\n")
+	f.write("    Register <bit<16>, bit<16>> (32w1024)  pkt_losscal;\n")
 	f.write("    Register <bit<32>, _> (32w1)  ax;\n")
 	f.write("\n")
-	for i in range(len(links)):
-		f.write("    RegisterAction<bit<32>, bit<1>, bit<8>>(tscal" + str(i) + ") tscal_action" + str(i) + " = {\n")
-		f.write("        void apply(inout bit<32> value, out bit<8> readvalue){\n")
-		f.write("            value = 0;\n")
-		f.write("            if (md.ts_diff > latency" + str(i) + "){ // @1-latency\n")
-		f.write("                readvalue = 1;\n")
-		f.write("            }else {\n")
-		f.write("                readvalue = 0;\n")
-		f.write("            }\n")
-		f.write("        }\n")
-		f.write("    };\n")
-		f.write("\n")
+	f.write("    RegisterAction<bit<32>, bit<16>, bit<8>>(tscal) tscal_action = {\n")
+	f.write("        void apply(inout bit<32> latency, out bit<8> readvalue){\n")
+	# f.write("            bit <32> latency = value;\n")
+	f.write("            if (md.ts_diff > latency){ // @1-latency\n")
+	f.write("                readvalue = 1;\n")
+	f.write("            }else {\n")
+	f.write("                readvalue = 0;\n")
+	f.write("            }\n")
+	f.write("        }\n")
+	f.write("    };\n")
+	f.write("\n")
+
+	f.write("    RegisterAction<bit<16>, bit<16>, bit<8>>(pkt_losscal) pkt_loss_action = {\n")
+	f.write("        void apply(inout bit<16> pkt_loss, out bit<8> readvalue){\n")
+	# f.write("            bit<16> pkt_loss = value;\n")
+	f.write("            if (md.R >= pkt_loss){ // @1-pkt_loss\n")
+	f.write("                readvalue = 1;\n")
+	f.write("            }else {\n")
+	f.write("                readvalue = 0;\n")
+	f.write("            }\n")
+	f.write("        }\n")
+	f.write("    };\n")
+	f.write("\n")
+
 
 	# Register for jitter
 	f.write("    RegisterAction<bit<32>, bit<1>, bit<8>>(ax) ax_action = {\n")
@@ -342,17 +348,17 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 	f.write("\n")
 	f.write("    // Calculate the difference between the initial timestamp a the current timestamp\n")
 	f.write("    action comp_diff() {\n")
-	f.write("         md.ts_diff = ig_intr_md.ingress_mac_tstamp[31:0] - hdr.rec.ts;\n")
+	f.write("        md.ts_diff = ig_intr_md.ingress_mac_tstamp[31:0] - hdr.rec.ts;\n")
 	f.write("    }\n")
 	f.write("\n")
 	f.write("    // increases jitter in the timestamp difference\n")
 	f.write("    action apply_more_jitter(){\n")
-	f.write("	  md.ts_diff = md.ts_diff + hdr.rec.jitter;\n")
+	f.write("	 	md.ts_diff = md.ts_diff + hdr.rec.jitter;\n")
 	f.write("    }\n")
 	f.write("\n")
 	f.write("    // decreases jitter in the timestamp difference\n")
 	f.write("    action apply_less_jitter(){\n")
-	f.write("    	  md.ts_diff = md.ts_diff - hdr.rec.jitter;\n")
+	f.write("    	md.ts_diff = md.ts_diff - hdr.rec.jitter;\n")
 	f.write("    }\n")
 	f.write("\n")
 	f.write("    // Match incoming packet\n")
@@ -529,78 +535,65 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 	f.write("\n")
 	f.write("    apply {\n")
 	f.write("        //sets the jitter to be applied\n")
-	f.write("	 if(!hdr.rec.isValid()){\n")
-	f.write("	     bit<7> P = percent.get();\n")
-	f.write("	     if(P <= percentTax){\n")
-	f.write("	         md.jitter_metadata = constJitter;\n")
-	f.write("		 md.signal_metadata = signalSelector.get();\n")
-	f.write("	     }\n")
-	f.write("	     else{\n")
-	f.write("		 md.jitter_metadata = 0;\n")
-	f.write("		 md.signal_metadata = 0;\n")
-	f.write("	     }\n")
-	f.write("	  }\n")
-
+	f.write("	 	if(!hdr.rec.isValid()){\n")
+	f.write("	    	bit<7> P = percent.get();\n")
+	f.write("	    	if(P <= percentTax){\n")
+	f.write("	        	md.jitter_metadata = constJitter;\n")
+	f.write("				md.signal_metadata = signalSelector.get();\n")
+	f.write("	    	}\n")
+	f.write("	    	else{\n")
+	f.write("				md.jitter_metadata = 0;\n")
+	f.write("				md.signal_metadata = 0;\n")
+	f.write("	    	}\n")
+	f.write("	  	}\n")
+	f.write("	  	\n")
 	f.write("        // Validate if the incoming packet has VLAN header\n")
 	f.write("        // Match the VLAN_ID with P7\n")
 	f.write("        if (hdr.vlan_tag.isValid() && !hdr.rec.isValid() && !hdr.arp.isValid()) {\n")
-	f.write("            vlan_fwd.apply();\n")
+	f.write("       	 	vlan_fwd.apply();\n")
 	if (routing_model == 1):
 		if slice_metric == "ToS":
-			f.write("            slice_dst.apply();\n")
+			f.write("        	 slice_dst.apply();\n")
 		else:
 			f.write("            slice_dst.apply();\n")
 			f.write("            slice_src.apply();\n")
 	f.write("        }\n")
 	f.write("        else if (hdr.vlan_tag.isValid() && !hdr.rec.isValid() && hdr.arp.isValid()) {\n")
-	f.write("            arp_fwd.apply();\n")
+	f.write("        	arp_fwd.apply();\n")
 	f.write("        } else {\n")
 	f.write("            // If the recirculation header is valid, match the switch ID\n")
 	f.write("            // Then verify the timestamp difference (latency)\n")
 	f.write("            // Apply the packet_loss value with the random number generated\n")
 	f.write("            // Verify if the switch is the final one or need to be processed by the next one\n")
 	f.write("            if (hdr.rec.isValid()) {\n")
-	f.write("                //Number of switch\n")
-	for i in range(len(links)):
-		if i == 0:
-			f.write("                if (hdr.rec.sw == " + str(i) + "){                   // " + str(i) + " - ID switch\n")
-		else:
-			f.write("                else if (hdr.rec.sw == " + str(i) + "){                   // " + str(i) + " - ID switch\n")
-		f.write("                    bit<8> value_tscal;\n")
-		f.write("                    md.ts_diff = 0;\n")
-		f.write("                    comp_diff();\n")
-		f.write("    		     //apply the jitter\n")
-		f.write("		     if(hdr.rec.signal==0){\n")
-		f.write("		         apply_more_jitter();\n")
-		f.write("      		     }else{\n")
-		f.write("   		         if(ax_action.execute(1)==1)\n")
-		f.write("		     	     apply_less_jitter();\n")
-		f.write("		     }\n")
-		f.write("                    value_tscal = tscal_action" + str(i) + ".execute(1);\n")
-		f.write("                    if (value_tscal == 1){\n")
-		f.write("                        bit<10> R = rnd.get();\n")
-		f.write("                        if (R >= pkt_loss" + str(i) + ") {            // @2-% of pkt loss \n")
-		f.write("                            basic_fwd.apply();\n")
-		if (routing_model == 1):
-			f.write("                            basic_fwd_hash.apply();\n")
-		f.write("                        }else{\n")
-		f.write("                            drop();\n")
-		f.write("                        } \n")
-		f.write("                    }else {\n")
-		f.write("                        recirculate(rec_port);          // Recirculation port (e.g., loopback interface)\n")
-		f.write("                    }   \n")
-		if len(links) > 0 and i < len(links)-1:
-			f.write("                }\n")
-	f.write("                }else{\n")
-	f.write("                    drop();\n")
-	f.write("                } \n")
+	f.write("                    bit<16> select_sw = hdr.rec.sw;\n")
+	f.write("                    md.ts_diff = 0;\n")
+	f.write("                    comp_diff();\n")
+	f.write("    		     	//apply the jitter\n")
+	f.write("		     		if(hdr.rec.signal==0){\n")
+	f.write("		         		apply_more_jitter();\n")
+	f.write("      		     	}else{\n")
+	f.write("   		         		if(ax_action.execute(1)==1)\n")
+	f.write("		     	     		apply_less_jitter();\n")
+	f.write("		     		 	}\n")
+	f.write("                    if (tscal_action.execute(select_sw) == 1){\n")
+	f.write("                        md.R = (bit<16>)rnd.get();\n")
+	f.write("                        if (pkt_loss_action.execute(select_sw) == 1) {            // @2-% of pkt loss \n")
+	f.write("                            basic_fwd.apply();\n")
+	if (routing_model == 1):
+		f.write("                            basic_fwd_hash.apply();\n")
+	f.write("                        }else{\n")
+	f.write("                            drop();\n")
+	f.write("                        } \n")
+	f.write("                    }else {\n")
+	f.write("                        recirculate(rec_port);          // Recirculation port (e.g., loopback interface)\n")
+	f.write("                    }   \n")
 	f.write("            // If the recirculation header is not valid\n")
 	f.write("            // Perform the match action to add recirculation header           \n")
 	f.write("            }else{\n")
 	f.write("               drop();    \n")
 	f.write("            }\n")
 	f.write("        }\n")
-	f.write("\n")
 	f.write("        // No need for egress processing, skip it and use empty controls for egress.\n")
 	f.write("        ig_intr_tm_md.bypass_egress = 1w1;\n")
 	f.write("    }\n")

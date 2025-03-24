@@ -1,5 +1,5 @@
  ################################################################################
- # Copyright 2024 INTRIG
+ # Copyright 2025 INTRIG
  #
  # Licensed under the Apache License, Version 2.0 (the "License");
  # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  # limitations under the License.
  ################################################################################
 
-def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mirror,
+def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mirror, links_metrics,
                 routing_model, route_ids, edge_links, route_seq, link_seq, route_dest, edge_hosts, name_sw,
                 slice_list, slice_number, slice_metric):
     links = []
@@ -220,6 +220,17 @@ def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mir
         f.write("arp_fwd.add_with_match_arp_direct(vid=" + str(vlans[i][2]) + ", ingress_port=" + str(vlans[i][0]) + ",   port=" + str(vlans[i][1]) + ")\n")
         f.write("arp_fwd.add_with_match_arp_direct(vid=" + str(vlans[i][2]) + ", ingress_port=" + str(vlans[i][1]) + ",   port=" + str(vlans[i][0]) + ")\n")
         f.write("\n")
+    f.write("\n")
+
+    for i in range(len(links_metrics)):
+        if (i==0):
+            f.write("tscal = p4p7.SwitchIngress.tscal\n")
+        f.write("tscal.add(REGISTER_INDEX=" + str(i) + ",f1=" + str(links_metrics[i][4]*1000000) + ")\n")
+    f.write("\n")
+    for i in range(len(links_metrics)):
+        if (i==0):
+            f.write("pkt_loss = p4p7.SwitchIngress.pkt_losscal\n")
+        f.write("pkt_loss.add(REGISTER_INDEX=" + str(i) + ",f1=" + str(round(10.2*links_metrics[i][3])) + ")\n")
     f.write("\n")
 
     table_list = []
