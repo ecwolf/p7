@@ -28,9 +28,19 @@ from src.gen_routeids import *
 from src.gen_setfiles import *
 from src.gen_multiple import *
 
+import argparse
+import os
+import subprocess
+
 class generator:
 
-        def __init__(self, name):
+        def __init__(self, name, args):
+                parser = argparse.ArgumentParser(description="P7")
+                parser.add_argument("-nt", "--no-tools", help="Define if toos are going to be used to compile", action="store_true")
+                parser.add_argument("-c", "--compile-p4", help="Enable P4 code compilation", action="store_true")
+                parser.add_argument("-s", "--run-switch", help="Compile the P4 files and run the switch", action="store_true")
+                self.args = parser.parse_args(args)
+                
                 self.name = name
                 self.p4_code = ''
                 self.stratum_ip = ""
@@ -333,6 +343,8 @@ class generator:
                 print("\nGenerating multiprogram Code\n")
                 gen_multiple(self.p4_code, self.routing_model)
 
+                self.compile_p7()
+
         def find_edge_nodes(self, array_list, node_pair):
                 node_set = set(node_pair)
                 for i, array in enumerate(array_list):
@@ -351,3 +363,47 @@ class generator:
                                 else:
                                         host.append([i, array[0]])
                 return host
+
+        def compile_p7(self):
+                env = os.environ.copy()
+
+                if self.args.no_tools:
+                        env["NO_TOOLS"] = "1"
+                else:
+                        env["NO_TOOLS"] = "0"
+
+                if self.args.compile_p4:
+                        env["COMPILE_P4"] = "1"
+                        if env["NO_TOOLS"] == "1":
+                                print("Flags -c and -nt not compatible")
+                                print("To auto compile and run add the correct flags")
+                                print("or manually compile and run the files")
+                                print("P7 compiled and supporting files generated")
+                                exit()
+                        subprocess.run(["bash", "set_files.sh"])
+                else:
+                        env["COMPILE_P4"] = "0" 
+
+                if self.args.run_switch:
+                        env["RUN_SWITCH"] = "1"
+                        subprocess.run(["bash", "set_files.sh"])
+                else:
+                        env["RUN_SWITCH"] = "0" 
+                
+                if self.routing_model == 1:
+                        env["POLKA"] = "1"
+                else:
+                        env["POLKA"] = "0" 
+
+                p4_original = self.p4_code # file name of original user p4 code
+                p4_name = p4_original.split(".")
+                if p4_name[0].find('/') != -1:
+                        p4_copy = p4_name[0].split("/")
+                        env["USERP4"] = p4_copy[-1] + "_mod"
+                else:
+                        env["USERP4"] = p4_name[0] + "_mod"
+
+
+                subprocess.run(["bash", "run.sh"], env=env)
+
+                
