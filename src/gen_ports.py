@@ -93,12 +93,15 @@ def generate_port(hosts, links, vlans, rec_bw):
 		f.write("exit" + "\n")
 		f.write("bfrt_python" + "\n")
 		for i in range(len(hosts)):
-			f.write("tf1.tm.port.sched_cfg.mod(dev_port=" + str(hosts[i][2]) + ", max_rate_enable=True)\n")
+			if (hosts[i][3] > links[i][2] and len(links) <= 2):
+				f.write("tf1.tm.port.sched_cfg.mod(dev_port=" + str(hosts[i][2]) + ", max_rate_enable=True)\n")
 			if (len(links) > 1 and different_bw == 0):
-				f.write("tf1.tm.port.sched_shaping.mod(dev_port=" + str(hosts[i][2]) + ", unit='BPS', provisioning='MIN_ERROR', max_rate=" + str(int(links[i][2]/1000)) + ", max_burst_size=9000)" + "\n")
+				if (hosts[i][3] > links[i][2] and len(links) <= 2):
+					f.write("tf1.tm.port.sched_shaping.mod(dev_port=" + str(hosts[i][2]) + ", unit='BPS', provisioning='MIN_ERROR', max_rate=" + str(int(links[i][2]/1000)) + ", max_burst_size=9000)" + "\n")
 			else:
-				f.write("tf1.tm.port.sched_shaping.mod(dev_port=" + str(hosts[i][2]) + ", unit='BPS', provisioning='MIN_ERROR', max_rate=" + str(int(links[0][2]/1000)) + ", max_burst_size=9000)" + "\n")
-			if different_bw == 1 and a == 0 :
+				if (hosts[i][3] > links[i][2] and len(links) <= 2):
+					f.write("tf1.tm.port.sched_shaping.mod(dev_port=" + str(hosts[i][2]) + ", unit='BPS', provisioning='MIN_ERROR', max_rate=" + str(int(links[i][2]/1000)) + ", max_burst_size=9000)" + "\n")
+			if different_bw == 1 and a == 0 and len(links) > 2:
 				for l in range(len(links)):
 					if links[l][2] < hosts[i][3]:
 						f.write("tf1.tm.port.sched_cfg.mod(dev_port=" + str(rec_bw[1] + a) + ", max_rate_enable=True)\n")
