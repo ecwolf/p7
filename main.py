@@ -38,8 +38,8 @@ topo.addhost("h2","1/2", 134, 10000000000, "False", "False", 1920, "192.168.0.20
 
 # addlink(node1, node2, bw, pkt_loss, latency, jitter, percentage)
 # bw is considered just for the first defined link
-topo.addlink("h1","sw1", 10000000000, 10, 10, 0, 100)
-topo.addlink("sw1","h2", 10000000000, 0, 0, 0, 100)
+topo.addlink("h1","sw1", 1000000000, 10, 10, 0, 100)
+topo.addlink("sw1","h2", 2000000000, 0, 0, 0, 100)
 
 # add table entry sw1
 topo.addtable('sw1','SwitchIngress.calculate')

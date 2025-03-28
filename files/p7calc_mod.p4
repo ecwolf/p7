@@ -231,12 +231,26 @@ control SwitchIngress(
 
 
     apply {
+	if (ig_intr_md.ingress_port == 0 || ig_intr_md.ingress_port == 1){
+		ig_intr_tm_md.ucast_egress_port = 196;
+	}
+	else{
         if(!hdr.arp.isValid()){
             calculate.apply();
         }
         ig_intr_tm_md.bypass_egress = 1w1;
-   	ig_intr_tm_md.ucast_egress_port = 196;
-	 }
+
+	if (hdr.rec.sw == 0){
+		ig_intr_tm_md.ucast_egress_port = 0;
+	}
+	else if (hdr.rec.sw == 1){
+		ig_intr_tm_md.ucast_egress_port = 1;
+	}
+	else{
+		ig_intr_tm_md.ucast_egress_port = 196;
+	}
+	}
+}
 }
 
 

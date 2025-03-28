@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2022 INTRIG
+ * Copyright 2025 INTRIG
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,15 +19,14 @@
 #include "common/headers.p4"
 #include "common/util.p4"
 
-
 /*************************************************************************
  ************* C O N S T A N T S    A N D   T Y P E S  *******************
 **************************************************************************/
 const vlan_id_t p7_vlan = 1920;        // vlan for P7
-const bit<16> total_sw = 4;         // total number of switches
-const bit<10> pkt_loss = 0x0;       // packet loss  - 0xCC - 240 - 20%
-const PortId_t rec_port = 68;       // recirculation port
-const bit<32> latency = 5000000;   // latency  - 10000000 - 10ms
+const PortId_t rec_port = 196;       // recirculation port
+const PortId_t port_user = 68;       // recirculation port
+const bit<32> constJitter = 0;   // jitter  - 0 - 0ms
+const bit<7> percentTax = 127;   // percent*127/100
 
 /*************************************************************************
 **************  I N G R E S S   P R O C E S S I N G   *******************
@@ -35,17 +34,12 @@ const bit<32> latency = 5000000;   // latency  - 10000000 - 10ms
 
 /***********************  H E A D E R S  ************************/
 
-struct headers {
-    ethernet_h   ethernet;
-    rec_h        rec;
-    vlan_tag_h   vlan_tag;
-    arp_h   arp;
-    ipv4_h       ipv4;
-}
-
 struct my_ingress_metadata_t {
     bit<32>  ts_diff;
-    bit<16> polka_next;
+    bit<32>  jitter_metadata;
+    bit<1>   signal_metadata;
+    bit<31>  padding;
+    bit<16>  R;
 }
 
     /******  G L O B A L   I N G R E S S   M E T A D A T A  *********/
@@ -117,26 +111,42 @@ control SwitchIngress(
         inout ingress_intrinsic_metadata_for_deparser_t ig_intr_dprsr_md,
         inout ingress_intrinsic_metadata_for_tm_t ig_intr_tm_md) {
 
-    // PolKa
-    CRCPolynomial<bit<16>>(
-                            coeff    = (65539 & 0xffff),
-                            reversed = false,
-                            msb      = false,
-                            extended = false,
-                            init     = 16w0x0000,
-                            xor      = 16w0x0000) poly;
-    Hash<bit<16>>(HashAlgorithm_t.CUSTOM, poly) hash;
-
-    // Random value used to calculate pkt loss 
+    // Random value used to calculate pkt loss jitter
     Random<bit<10>>() rnd;
+    Random<bit<7>>() percent;
+    Random<bit<1>>() signalSelector;
 
-    // Register to validate the latency value 
-    Register <bit<32>, _> (32w1)  tscal;
+    // Register to validate the latency value
+    Register <bit<32>, bit<16>> (32w1024)  tscal;
+    Register <bit<16>, bit<16>> (32w1024)  pkt_losscal;
+    Register <bit<32>, _> (32w1)  ax;
 
-    RegisterAction<bit<32>, bit<1>, bit<8>>(tscal) tscal_action = {
+    RegisterAction<bit<32>, bit<16>, bit<8>>(tscal) tscal_action = {
+        void apply(inout bit<32> value, out bit<8> readvalue){
+            bit <32> latency = value;
+            if (md.ts_diff > latency){ // @1-latency
+                readvalue = 1;
+            }else {
+                readvalue = 0;
+            }
+        }
+    };
+
+    RegisterAction<bit<16>, bit<16>, bit<8>>(pkt_losscal) pkt_loss_action = {
+        void apply(inout bit<16> value, out bit<8> readvalue){
+            bit<16> pkt_loss = value;
+            if (md.R >= pkt_loss){ // @1-pkt_loss
+                readvalue = 1;
+            }else {
+                readvalue = 0;
+            }
+        }
+    };
+
+    RegisterAction<bit<32>, bit<1>, bit<8>>(ax) ax_action = {
         void apply(inout bit<32> value, out bit<8> readvalue){
             value = 0;
-            if (md.ts_diff > latency){ // @1-latency
+            if (md.ts_diff > constJitter){ // @jitter
                 readvalue = 1;
             }else {
                 readvalue = 0;
@@ -156,24 +166,20 @@ control SwitchIngress(
         hdr.ethernet.ether_type = hdr.rec.ether_type;
         ig_intr_tm_md.ucast_egress_port = port;
         hdr.rec.setInvalid();
-
         ig_intr_tm_md.bypass_egress = 1w1;
     }
 
     // Send packet to the next internal switch 
     // Reset the initial timestamp
     // Increase the ID of the switch
-    action send_next(bit<16> sw_id) {
-        // PolKa routing
-        bit<112> ndata = (bit<112>) (hdr.rec.routeid >> 16);
-        bit<16> diff = (bit<16>) hdr.rec.routeid;
-        bit<16> nres = hash.get(ndata);
-        md.polka_next = nres ^ diff;
-
+    action send_next(bit<16> link_id, bit<16> sw_id) {
         hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];
         hdr.rec.num = 1;
-        hdr.rec.sw = md.polka_next; // Defined by PolKa
-        ig_intr_tm_md.ucast_egress_port = rec_port;
+
+        hdr.rec.sw = link_id;
+        hdr.rec.sw_id = sw_id;
+
+        ig_intr_tm_md.ucast_egress_port = port_user;
     }
 
     // Forward a packet directly without any P7 processing
@@ -190,7 +196,17 @@ control SwitchIngress(
 
     // Calculate the difference between the initial timestamp a the current timestamp
     action comp_diff() {
-         md.ts_diff = ig_intr_md.ingress_mac_tstamp[31:0] - hdr.rec.ts;
+        md.ts_diff = ig_intr_md.ingress_mac_tstamp[31:0] - hdr.rec.ts;
+    }
+
+    // increases jitter in the timestamp difference
+    action apply_more_jitter(){
+	 	md.ts_diff = md.ts_diff + hdr.rec.jitter;
+    }
+
+    // decreases jitter in the timestamp difference
+    action apply_less_jitter(){
+    	md.ts_diff = md.ts_diff - hdr.rec.jitter;
     }
 
     // Match incoming packet
@@ -199,20 +215,19 @@ control SwitchIngress(
     // Save the initial timestamp (ingress_mac_tstamp) in the recirculation header - ts
     // Set the starting number of recirculation - num
     // Set the ID of the first switch - sw
-    action match(bit <16> link, bit <160> routeIdPacket) {
+    action match(bit<16> link) {
         hdr.rec.setValid();
         hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];
         hdr.rec.num = 1;
-        hdr.rec.sw = link; // Updated by Polka
+        hdr.rec.sw = link;
         hdr.rec.dest_ip = hdr.ipv4.dst_addr;
         hdr.rec.ether_type = hdr.ethernet.ether_type;
         hdr.vlan_tag.vid = p7_vlan;
 
-        hdr.ethernet.ether_type = 0x9966;
-        //hdr.ethernet.src_addr = 0x000000000000;
+        hdr.rec.jitter = md.jitter_metadata;
+        hdr.rec.signal = md.signal_metadata;
 
-        // PolKa Edge - IN
-        hdr.rec.routeId = routeIdPacket;
+        hdr.ethernet.ether_type = 0x9966;
 
         ig_intr_tm_md.ucast_egress_port = rec_port;
         ig_intr_tm_md.bypass_egress = 1w1;
@@ -227,10 +242,17 @@ control SwitchIngress(
         hdr.rec.ether_type = hdr.ethernet.ether_type;
         hdr.vlan_tag.vid = p7_vlan;
 
+        hdr.rec.jitter = md.jitter_metadata;
+        hdr.rec.signal = md.signal_metadata;
+
         hdr.ethernet.ether_type = 0x9966;
 
         ig_intr_tm_md.ucast_egress_port = rec_port;
         ig_intr_tm_md.bypass_egress = 1w1;
+    }
+
+    action match_arp_direct(PortId_t port) {
+        ig_intr_tm_md.ucast_egress_port = port;
     }
 
     // Table perform l2 forward
@@ -246,7 +268,7 @@ control SwitchIngress(
             @defaultonly drop;
         }
         const default_action = drop();
-        size = 1024;
+        size = 128;
     }
 
 
@@ -263,7 +285,7 @@ control SwitchIngress(
             @defaultonly drop;
         }
         const default_action = drop();
-        size = 1024;
+        size = 128;
     }
 
     table arp_fwd {
@@ -273,50 +295,54 @@ control SwitchIngress(
         }
         actions = {
             match_arp;
+            match_arp_direct;
             @defaultonly drop;
         }
         const default_action = drop();
-        size = 1024;
+        size = 128;
     }
 
-    // PolKa
-    table tbl_polka {
-        key = {
-            ig_md.vrf: exact;
-            ig_md.polka_next: exact;
-        }
-        actions = {
-            act_forward;
-            act_route;
-            @defaultonly drop;
-        }
-        const default_action = drop();
-        size = 1024;
-    }
 
     apply {
+        //sets the jitter to be applied
+	 	if(!hdr.rec.isValid()){
+	    	bit<7> P = percent.get();
+	    	if(P <= percentTax){
+	        	md.jitter_metadata = constJitter;
+				md.signal_metadata = signalSelector.get();
+	    	}
+	    	else{
+				md.jitter_metadata = 0;
+				md.signal_metadata = 0;
+	    	}
+	  	}
+	  	
         // Validate if the incoming packet has VLAN header
         // Match the VLAN_ID with P7
         if (hdr.vlan_tag.isValid() && !hdr.rec.isValid() && !hdr.arp.isValid()) {
-            vlan_fwd.apply();
+       	 	vlan_fwd.apply();
         }
         else if (hdr.vlan_tag.isValid() && !hdr.rec.isValid() && hdr.arp.isValid()) {
-            arp_fwd.apply();
+        	arp_fwd.apply();
         } else {
             // If the recirculation header is valid, match the switch ID
             // Then verify the timestamp difference (latency)
             // Apply the packet_loss value with the random number generated
             // Verify if the switch is the final one or need to be processed by the next one
             if (hdr.rec.isValid()) {
-                //Number of switch
-                if (hdr.rec.sw == 0){                   // 0 - ID switch
-                    bit<8> value_tscal;
+                    bit<16> select_sw = hdr.rec.sw;
                     md.ts_diff = 0;
                     comp_diff();
-                    value_tscal = tscal_action.execute(1);
-                    if (value_tscal == 1){
-                        bit<10> R = rnd.get();
-                        if (R >= pkt_loss) {            // @2-% of pkt loss 
+    		     	//apply the jitter
+		     		if(hdr.rec.signal==0){
+		         		apply_more_jitter();
+      		     	}else{
+   		         		if(ax_action.execute(1)==1)
+		     	     		apply_less_jitter();
+		     		 	}
+                    if (tscal_action.execute(select_sw) == 1){
+                        md.R = (bit<16>)rnd.get();
+                        if (pkt_loss_action.execute(select_sw) == 1) {            // @2-% of pkt loss 
                             basic_fwd.apply();
                         }else{
                             drop();
@@ -324,128 +350,12 @@ control SwitchIngress(
                     }else {
                         recirculate(rec_port);          // Recirculation port (e.g., loopback interface)
                     }   
-                }
-                else if (hdr.rec.sw == 1){                   // 0 - ID switch
-                    bit<8> value_tscal;
-                    md.ts_diff = 0;
-                    comp_diff();
-                    value_tscal = tscal_action.execute(1);
-                    if (value_tscal == 1){
-                        bit<10> R = rnd.get();
-                        if (R >= pkt_loss) {            // @2-% of pkt loss 
-                            basic_fwd.apply();
-                        }else{
-                            drop();
-                        } 
-                    }else {
-                        recirculate(rec_port);          // Recirculation port (e.g., loopback interface)
-                    }   
-                }
-                else if (hdr.rec.sw == 2){                   // 0 - ID switch
-                    bit<8> value_tscal;
-                    md.ts_diff = 0;
-                    comp_diff();
-                    value_tscal = tscal_action.execute(1);
-                    if (value_tscal == 1){
-                        bit<10> R = rnd.get();
-                        if (R >= pkt_loss) {            // @2-% of pkt loss 
-                            basic_fwd.apply();
-                        }else{
-                            drop();
-                        } 
-                    }else {
-                        recirculate(rec_port);          // Recirculation port (e.g., loopback interface)
-                    }   
-                }
-                else if (hdr.rec.sw == 3){                   // 0 - ID switch
-                    bit<8> value_tscal;
-                    md.ts_diff = 0;
-                    comp_diff();
-                    value_tscal = tscal_action.execute(1);
-                    if (value_tscal == 1){
-                        bit<10> R = rnd.get();
-                        if (R >= pkt_loss) {            // @2-% of pkt loss 
-                            basic_fwd.apply();
-                        }else{
-                            drop();
-                        } 
-                    }else {
-                        recirculate(rec_port);          // Recirculation port (e.g., loopback interface)
-                    }   
-                }
-                else if (hdr.rec.sw == 4){                   // 0 - ID switch
-                    bit<8> value_tscal;
-                    md.ts_diff = 0;
-                    comp_diff();
-                    value_tscal = tscal_action.execute(1);
-                    if (value_tscal == 1){
-                        bit<10> R = rnd.get();
-                        if (R >= pkt_loss) {            // @2-% of pkt loss 
-                            basic_fwd.apply();
-                        }else{
-                            drop();
-                        } 
-                    }else {
-                        recirculate(rec_port);          // Recirculation port (e.g., loopback interface)
-                    }   
-                }
-                else if (hdr.rec.sw == 5){                   // 0 - ID switch
-                    bit<8> value_tscal;
-                    md.ts_diff = 0;
-                    comp_diff();
-                    value_tscal = tscal_action.execute(1);
-                    if (value_tscal == 1){
-                        bit<10> R = rnd.get();
-                        if (R >= pkt_loss) {            // @2-% of pkt loss 
-                            basic_fwd.apply();
-                        }else{
-                            drop();
-                        } 
-                    }else {
-                        recirculate(rec_port);          // Recirculation port (e.g., loopback interface)
-                    }   
-                }
-                else if (hdr.rec.sw == 6){                   // 0 - ID switch
-                    bit<8> value_tscal;
-                    md.ts_diff = 0;
-                    comp_diff();
-                    value_tscal = tscal_action.execute(1);
-                    if (value_tscal == 1){
-                        bit<10> R = rnd.get();
-                        if (R >= pkt_loss) {            // @2-% of pkt loss 
-                            basic_fwd.apply();
-                        }else{
-                            drop();
-                        } 
-                    }else {
-                        recirculate(rec_port);          // Recirculation port (e.g., loopback interface)
-                    }   
-                }
-                else if (hdr.rec.sw == 7){                   // 0 - ID switch
-                    bit<8> value_tscal;
-                    md.ts_diff = 0;
-                    comp_diff();
-                    value_tscal = tscal_action.execute(1);
-                    if (value_tscal == 1){
-                        bit<10> R = rnd.get();
-                        if (R >= pkt_loss) {            // @2-% of pkt loss 
-                            basic_fwd.apply();
-                        }else{
-                            drop();
-                        } 
-                    }else {
-                        recirculate(rec_port);          // Recirculation port (e.g., loopback interface)
-                    }   
-                }else{
-                    drop();
-                } 
             // If the recirculation header is not valid
             // Perform the match action to add recirculation header           
             }else{
                drop();    
             }
         }
-
         // No need for egress processing, skip it and use empty controls for egress.
         ig_intr_tm_md.bypass_egress = 1w1;
     }
@@ -456,6 +366,6 @@ Pipeline(SwitchIngressParser(),
          SwitchIngressDeparser(),
          EmptyEgressParser(),
          EmptyEgress(),
-         EmptyEgressDeparser()) pipe;
+         EmptyEgressDeparser()) pipe_p7;
 
-Switch(pipe) main;
+Switch(pipe_p7) main;

@@ -43,7 +43,7 @@ vendor_config {
           key: 132
           value {
             byte_shaping {
-              max_rate_bps: 10000000000# 10000000000 10Gbps 500000000
+              max_rate_bps: 1000000000# 10000000000 10Gbps 500000000
               max_burst_bytes: 9000 # 2x jumbo frame
             }
           }
