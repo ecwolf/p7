@@ -63,6 +63,30 @@ pkt_loss = p4p7.SwitchIngress.pkt_losscal
 pkt_loss.add(REGISTER_INDEX=0,f1=102)
 pkt_loss.add(REGISTER_INDEX=1,f1=0)
 
+transition_state_p = p4p7.SwitchIngress.transition_state_p
+transition_state_p.add(REGISTER_INDEX=0,f1=57)
+transition_state_p.add(REGISTER_INDEX=1,f1=0)
+
+transition_state_r = p4p7.SwitchIngress.transition_state_r
+transition_state_r.add(REGISTER_INDEX=0,f1=510)
+transition_state_r.add(REGISTER_INDEX=1,f1=0)
+
+probability_send_k = p4p7.SwitchIngress.probability_send_k
+probability_send_k.add(REGISTER_INDEX=0,f1=1020)
+probability_send_k.add(REGISTER_INDEX=1,f1=1020)
+
+probability_send_h = p4p7.SwitchIngress.probability_send_h
+probability_send_h.add(REGISTER_INDEX=0,f1=0)
+probability_send_h.add(REGISTER_INDEX=1,f1=0)
+
+state_holder = p4p7.SwitchIngress.state
+state_holder.add(REGISTER_INDEX=0,f1=1)
+state_holder.add(REGISTER_INDEX=1,f1=1)
+
+pkt_loss_model = p4p7.SwitchIngress.pkt_loss_model
+pkt_loss_model.add(REGISTER_INDEX=0,f1=1)
+pkt_loss_model.add(REGISTER_INDEX=1,f1=0)
+
 calculate = p4user.SwitchIngress.calculate
 calculate.add_with_operation_add(sw_id= 0, dst_addr = IPAddress('192.168.0.10'), value = 5)
 calculate = p4user.SwitchIngress.calculate

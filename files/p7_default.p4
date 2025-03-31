@@ -27,7 +27,7 @@ const PortId_t rec_port = 196;       // recirculation port
 const PortId_t port_user = 68;       // recirculation port
 const bit<32> constJitter = 0;   // jitter  - 0 - 0ms
 const bit<7> percentTax = 127;   // percent*127/100
-const bit<16> maxPercent = 0x3fc;	// Not used, but is the representation of 100% value
+const bit<16> maxPercent = 0x3fc;	// 100 percent of Loss value
 
 /*************************************************************************
 **************  I N G R E S S   P R O C E S S I N G   *******************
@@ -41,9 +41,9 @@ struct my_ingress_metadata_t {
     bit<1>   signal_metadata;
     bit<31>  padding;
     bit<16>  R;
-    bit<1>   prob_r;
-    bit<1>   prob_p;
-    bit<14>  padd;
+    bit<16>  R_send;
+    bit<16>  prob_r;
+    bit<16>  prob_p;
 }
 
     /******  G L O B A L   I N G R E S S   M E T A D A T A  *********/
@@ -122,16 +122,18 @@ control SwitchIngress(
 
     // Register to validate the latency value
     Register <bit<32>, bit<16>> (32w1024)  tscal;
-    
-    // Register to validate the Jitter value
-    Register <bit<32>, _> (32w1)  ax;
 
-    //Register to valdiate the packet loss model
+    // Register to validate the Jitter value
+    Register <bit<32>, bit<16>> (32w1)  ax;
+
+    // Register to valdiate the packet loss model
     Register <bit<16>, bit<16>> (32w1024)  pkt_losscal;
-    Register <bit<32>, bit<16>> (32w1024)  transition_state;
-    Register <bit<32>, bit<16>> (32w1024)  probability_send;
-    Register <bit<1>, bit<16>> (32w1024) state;
-    Register <bit<8>, bit<16>> (32w1024) pkt_loss_model;
+	 Register <bit<16>, bit<16>> (32w1024)  transition_state_p;
+	 Register <bit<16>, bit<16>> (32w1024)  transition_state_r;
+	 Register <bit<16>, bit<16>> (32w1024)  probability_send_k;
+	 Register <bit<16>, bit<16>> (32w1024)  probability_send_h;
+	 Register <bit<16>, bit<16>> (32w1024)  state;
+	 Register <bit<16>, bit<16>> (32w1024)  pkt_loss_model;
 
     RegisterAction<bit<32>, bit<16>, bit<8>>(tscal) tscal_action = {
         void apply(inout bit<32> latency, out bit<8> readvalue){
@@ -140,6 +142,12 @@ control SwitchIngress(
             }else {
                 readvalue = 0;
             }
+        }
+    };
+
+	RegisterAction<bit<16>, bit<16>, bit<16>>(pkt_loss_model) pkt_loss_model_action = {
+        void apply(inout bit<16> model, out bit<16> readvalue){
+            readvalue = model;
         }
     };
 
@@ -153,7 +161,7 @@ control SwitchIngress(
         }
     };
 
-    RegisterAction<bit<32>, bit<1>, bit<8>>(ax) ax_action = {
+    RegisterAction<bit<32>, bit<16>, bit<8>>(ax) ax_action = {
         void apply(inout bit<32> value, out bit<8> readvalue){
             value = 0;
             if (md.ts_diff > constJitter){ // @jitter
@@ -164,26 +172,48 @@ control SwitchIngress(
         }
     };
 
-    RegisterAction<bit<8>, bit<16>, bit<8>>(pkt_loss_model) pkt_loss_model_action = {
-        void apply(inout bit<8> loss_model, out bit<8> readvalue){
-            readvalue = loss_model;
+    RegisterAction<bit<16>, bit<16>, bit<16>>(transition_state_p) transition_state_p_action = {
+        void apply(inout bit<16> p, out bit<16> readvalue){
+            if ( p > md.R ) {  // if p > R, go to bad state
+                readvalue = 0;
+            }else {         // else p < R, keep to good state
+                readvalue = 1;
+            }
         }
     };
 
-    RegisterAction<bit<32>, bit<16>, bit<32>>(transition_state) transition_state_action = {
-        void apply(inout bit<32> probability, out bit<32> readvalue){
-            readvalue = probability;
+    RegisterAction<bit<16>, bit<16>, bit<16>>(transition_state_r) transition_state_r_action = {
+        void apply(inout bit<16> r, out bit<16> readvalue){
+            if ( r > md.R ) {  // if r > R, go to good state
+                readvalue = 1;
+            }else {         // else r < R, keep to bad stae
+                readvalue = 0;
+            }
         }
     };
 
-    RegisterAction<bit<32>, bit<16>, bit<32>>(probability_send) probability_send_action = {
-        void apply(inout bit<32> probability, out bit<32> readvalue){
-            readvalue = probability;
+    RegisterAction<bit<16>, bit<16>, bit<16>>(probability_send_k) probability_send_k_action = {
+        void apply(inout bit<16> k, out bit<16> readvalue){
+            if ( md.R_send < maxPercent - k ) {
+                readvalue = 0;
+            } else {
+                readvalue = 1;
+            }
         }
     };
 
-    RegisterAction<bit<1>, bit<16>, bit<1>>(state) state_action = {
-        void apply(inout bit<1> state_value, out bit<1> readvalue){
+    RegisterAction<bit<16>, bit<16>, bit<16>>(probability_send_h) probability_send_h_action = {
+        void apply(inout bit<16> h, out bit<16> readvalue){
+            if ( h > md.R_send ) {
+                readvalue = 1;
+            } else {
+                readvalue = 0;
+            }
+        }
+    };
+
+    RegisterAction<bit<16>, bit<16>, bit<16>>(state) state_action = {
+        void apply(inout bit<16> state_value, out bit<16> readvalue){
 			if (state_value == 1){   // GOOD_CASE - apply p condition
 				state_value = md.prob_p;
 			}else {                    // BAD_CASE - apply r condition
@@ -381,35 +411,21 @@ control SwitchIngress(
 		     		 	}
                     if (tscal_action.execute(select_sw) == 1){
                         md.R = (bit<16>)rnd.get();
-                        if (gilbert == 1){
-                            bit<16> R_send= (bit<16>)rnd.get();
-                            bit<32> global_probability = transition_state_action.execute(select_sw);
-                            bit<16> p = global_probability[31:16];
-                            bit<16> r = global_probability[15:0];
-                            bit<32> send_probability = probability_send_action.execute(select_sw);
-                            bit<16> h = send_probability[31:16];
-                            bit<16> k = send_probability[15:0];                        
-                            bit<1> value_state;
-                            if ( p > md.R ) {  // if p > R, go to bad state
-                                md.prob_p = 0;
-                            }else {         // else p < R, keep to good state
-                                md.prob_p = 1;
-                            }
-
-                            if ( r > md.R ) {  // if r > R, go to good state
-                                md.prob_r = 1;
-                            }else {         // else r < R, keep to bad stae
-                                md.prob_r = 0;
-                            }
-                            value_state = state_action.execute(select_sw); // change state according md.prob_p or md.prob_r
-                            if ( value_state == 1) {
-                                if ( R_send < maxPercent - k ) {
-                                    drop();
+                        // Thanks Leonardo Marques for the packet loss model contribution
+                        // https://github.com/l-io
+                        if (pkt_loss_model_action.execute(select_sw) == 1){
+                            md.prob_p = transition_state_p_action.execute(select_sw);
+                            md.prob_r = transition_state_r_action.execute(select_sw);
+                            md.R_send = (bit<16>)rnd.get();
+                            // change state according md.prob_p or md.prob_r
+                            if ( state_action.execute(select_sw) == 1) {
+                                if ( probability_send_k_action.execute(select_sw) == 0 ) {
+                                   drop();
                                 } else {
                                     basic_fwd.apply();
                                 }
                             } else {
-                                if ( h > R_send ) {
+                                if ( probability_send_h_action.execute(select_sw) == 1 ) {
                                     basic_fwd.apply();
                                 } else {
                                     drop();
