@@ -36,8 +36,10 @@ topo.addp4("p4src/p7calc.p4")
 topo.addhost("h1","1/0", 132, 10000000000, "False", "False", 1920, "192.168.0.10")
 topo.addhost("h2","1/2", 134, 10000000000, "False", "False", 1920, "192.168.0.20")
 
-# addlink(node1, node2, bw, pkt_loss, latency, jitter, percentage)
-# bw is considered just for the first defined link
+# addlink(node1, node2, bw, pkt_loss, latency, jitter, jitter percentage, packet loss model (optional))
+# Default packet loss model is Gilbert-Elliott
+# Optional a pure percentage validation drom can be selected by defining the pkt_loss_model=0
+# e.g., topo.addlink("h1","sw1", 1000000000, 10, 10, 0, 100, pkt_loss_model=0)
 topo.addlink("h1","sw1", 1000000000, 10, 10, 0, 100)
 topo.addlink("sw1","h2", 2000000000, 0, 0, 0, 100)
 

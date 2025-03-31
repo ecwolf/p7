@@ -14,6 +14,20 @@
  # limitations under the License.
  ################################################################################
 
+def gilbert_elliott_parameters(L, burstiness=0.5):
+    if not (0 < L < 1):
+        raise ValueError("L must be between 0 and 1 (exclusive).")
+    if not (0 <= burstiness <= 1):
+        raise ValueError("burstiness must be between 0 and 1 (inclusive).")
+    
+    # Maximum allowable p to keep r within [0,1]
+    p_max = L / (1 - L)
+    # Choose p based on burstiness: a value between 0 and p_max.
+    p = burstiness * p_max
+    # Calculate r from the relationship
+    r = (1 - L) / L * p
+    return p, r
+
 def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mirror, links_metrics,
                 routing_model, route_ids, edge_links, route_seq, link_seq, route_dest, edge_hosts, name_sw,
                 slice_list, slice_number, slice_metric):
@@ -231,6 +245,54 @@ def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mir
         if (i==0):
             f.write("pkt_loss = p4p7.SwitchIngress.pkt_losscal\n")
         f.write("pkt_loss.add(REGISTER_INDEX=" + str(i) + ",f1=" + str(round(10.2*links_metrics[i][3])) + ")\n")
+    f.write("\n")
+
+    # Packet loss model
+    initial_state = 1   # Start in the goog state
+    burstiness = 0.5    # Burstiness factor
+    p_probability = []
+    r_probability = []
+    k_probability = 1020    # Future update, define the probability of sending a packet in the good state
+    h_probability = 0       # Future update, define the probability of sending a packet in the bad state
+    # Getting Gilbert-Eliott parameters
+    for i in range(len(links_metrics)):
+        if (links_metrics[i][3] > 0):
+            p, r = gilbert_elliott_parameters((links_metrics[i][3])/100, burstiness)
+        else:
+            p = 0
+            r = 0
+        p_probability.append(round(1020*p))
+        r_probability.append(round(1020*r))
+    for i in range(len(links_metrics)):
+        if (i==0):
+            f.write("transition_state_p = p4p7.SwitchIngress.transition_state_p\n")
+        
+        f.write("transition_state_p.add(REGISTER_INDEX=" + str(i) + ",f1=" + str(p_probability[i]) + ")\n")
+    f.write("\n")
+    for i in range(len(links_metrics)):
+        if (i==0):
+            f.write("transition_state_r = p4p7.SwitchIngress.transition_state_r\n")
+        f.write("transition_state_r.add(REGISTER_INDEX=" + str(i) + ",f1=" + str(r_probability[i]) + ")\n")
+    f.write("\n")
+    for i in range(len(links_metrics)):
+        if (i==0):
+            f.write("probability_send_k = p4p7.SwitchIngress.probability_send_k\n")
+        f.write("probability_send_k.add(REGISTER_INDEX=" + str(i) + ",f1=" + str(k_probability) + ")\n")
+    f.write("\n")
+    for i in range(len(links_metrics)):
+        if (i==0):
+            f.write("probability_send_h = p4p7.SwitchIngress.probability_send_h\n")
+        f.write("probability_send_h.add(REGISTER_INDEX=" + str(i) + ",f1=" + str(h_probability) + ")\n")
+    f.write("\n")
+    for i in range(len(links_metrics)):
+        if (i==0):
+            f.write("state_holder = p4p7.SwitchIngress.state\n")
+        f.write("state_holder.add(REGISTER_INDEX=" + str(i) + ",f1=" + str(initial_state) + ")\n")
+    f.write("\n")
+    for i in range(len(links_metrics)):
+        if (i==0):
+            f.write("pkt_loss_model = p4p7.SwitchIngress.pkt_loss_model\n")
+        f.write("pkt_loss_model.add(REGISTER_INDEX=" + str(i) + ",f1=" + str(links_metrics[i][7]) + ")\n")
     f.write("\n")
 
     table_list = []

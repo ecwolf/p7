@@ -113,8 +113,10 @@ class generator:
                 host_data = [name,port, D_P, speed_bps, AU, FEC, vlan, ip]
                 self.host.append(host_data)
 
-        def addlink(self, node1, node2, bw, pkt_loss, latency, jitter, percent):
-                link_data = [node1, node2, bw, pkt_loss, latency, jitter, percent]
+        def addlink(self, node1, node2, bw, pkt_loss, latency, jitter, percent, pkt_loss_model=1):
+                if (pkt_loss == 0):
+                        pkt_loss_model = 0
+                link_data = [node1, node2, bw, pkt_loss, latency, jitter, percent, pkt_loss_model]
                 self.link.append(link_data)
 
         def addvlan_port(self, port, D_P, speed_bps, AU, FEC):
