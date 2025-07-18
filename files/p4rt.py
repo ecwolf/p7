@@ -10,32 +10,56 @@ sh.setup(
 
 te = sh.TableEntry('SwitchIngress.vlan_fwd')(action='SwitchIngress.match')
 te.match['vid'] = '1920'
-te.match['ingress_port'] = '132'
+te.match['ingress_port'] = '164'
 te.action['link']  = '0'
 te.insert()
 
 te = sh.TableEntry('SwitchIngress.vlan_fwd')(action='SwitchIngress.match')
 te.match['vid'] = '1920'
-te.match['ingress_port'] = '134'
-te.action['link']  = '1'
+te.match['ingress_port'] = '172'
+te.action['link']  = '4'
 te.insert()
 
 te = sh.TableEntry('SwitchIngress.arp_fwd')(action='SwitchIngress.match_arp')
 te.match['vid'] = '1920'
-te.match['ingress_port'] = '132'
+te.match['ingress_port'] = '164'
 te.action['link']  = '0'
 te.insert()
 
 te = sh.TableEntry('SwitchIngress.arp_fwd')(action='SwitchIngress.match_arp')
 te.match['vid'] = '1920'
-te.match['ingress_port'] = '134'
-te.action['link']  = '1'
+te.match['ingress_port'] = '172'
+te.action['link']  = '4'
 te.insert()
 
-te = sh.TableEntry('SwitchIngress.basic_fwd')(action='SwitchIngress.send')
+te = sh.TableEntry('SwitchIngress.basic_fwd')(action='SwitchIngress.send_next')
+te.match['sw'] = '3'
+te.match['dest_ip'] = '192.168.0.20'
+te.action['sw_id']  = '4'
+te.insert()
+
+te = sh.TableEntry('SwitchIngress.basic_fwd')(action='SwitchIngress.send_next')
+te.match['sw'] = '3'
+te.match['dest_ip'] = '192.168.0.10'
+te.action['sw_id']  = '2'
+te.insert()
+
+te = sh.TableEntry('SwitchIngress.basic_fwd')(action='SwitchIngress.send_next')
+te.match['sw'] = '2'
+te.match['dest_ip'] = '192.168.0.20'
+te.action['sw_id']  = '3'
+te.insert()
+
+te = sh.TableEntry('SwitchIngress.basic_fwd')(action='SwitchIngress.send_next')
+te.match['sw'] = '2'
+te.match['dest_ip'] = '192.168.0.10'
+te.action['sw_id']  = '1'
+te.insert()
+
+te = sh.TableEntry('SwitchIngress.basic_fwd')(action='SwitchIngress.send_next')
 te.match['sw'] = '1'
 te.match['dest_ip'] = '192.168.0.20'
-te.action['port']  = '134'
+te.action['sw_id']  = '2'
 te.insert()
 
 te = sh.TableEntry('SwitchIngress.basic_fwd')(action='SwitchIngress.send_next')
@@ -45,9 +69,21 @@ te.action['sw_id']  = '0'
 te.insert()
 
 te = sh.TableEntry('SwitchIngress.basic_fwd')(action='SwitchIngress.send')
+te.match['sw'] = '4'
+te.match['dest_ip'] = '192.168.0.20'
+te.action['port']  = '172'
+te.insert()
+
+te = sh.TableEntry('SwitchIngress.basic_fwd')(action='SwitchIngress.send_next')
+te.match['sw'] = '4'
+te.match['dest_ip'] = '192.168.0.10'
+te.action['sw_id']  = '3'
+te.insert()
+
+te = sh.TableEntry('SwitchIngress.basic_fwd')(action='SwitchIngress.send')
 te.match['sw'] = '0'
 te.match['dest_ip'] = '192.168.0.10'
-te.action['port']  = '132'
+te.action['port']  = '164'
 te.insert()
 
 te = sh.TableEntry('SwitchIngress.basic_fwd')(action='SwitchIngress.send_next')

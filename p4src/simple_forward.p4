@@ -63,22 +63,8 @@ header arp_h {
     bit<32> dest_ip;
 }
 
-header rec_h {
-	bit<32> ts;
-	bit<32> num;
-	bit<32> jitter;
-	bit<16> sw;
-	bit<16> sw_id;
-	bit<16> ether_type;
-	bit<32> dest_ip;
-	bit<1> signal;
-	bit<31> pad;
-	bit<160> routeid;
-}
-
 struct headers {
     ethernet_h   ethernet;
-	rec_h	rec;
     vlan_tag_h   vlan_tag;
     ipv4_h       ipv4;
     calc_h       calc;
@@ -113,25 +99,12 @@ parser SwitchIngressParser(
     state parse_ethernet {
         packet.extract(hdr.ethernet);
         transition select(hdr.ethernet.ether_type) {
-
-			16w0x9966:   parse_rec;
-
             ETHERTYPE_IPV4:  parse_ipv4;
             ETHERTYPE_VLAN:  parse_vlan;
             ETHERTYPE_ARP:  parse_arp;
             default: accept;
         }
     }
-
-	state parse_rec { 
-		packet.extract(hdr.rec);
-		transition select(hdr.rec.ether_type){
-            ETHERTYPE_IPV4:  parse_ipv4;
-            ETHERTYPE_VLAN:  parse_vlan;
-            ETHERTYPE_ARP:  parse_arp;
-            default: accept;
-        }
-	}
     
     state parse_vlan {
         packet.extract(hdr.vlan_tag);
@@ -193,36 +166,25 @@ control SwitchIngress(
         inout ingress_intrinsic_metadata_for_deparser_t ig_intr_dprsr_md,
         inout ingress_intrinsic_metadata_for_tm_t ig_intr_tm_md) {
 
-    action operation_add(bit<8> value) {
-        hdr.ipv4.ttl = hdr.ipv4.ttl + value;
-    }
-
-    action operation_xor(bit<8> value) {
-        hdr.ipv4.ttl = hdr.ipv4.ttl ^ value;
-    }
-
-    action operation_and(bit<8> value) {
-        hdr.ipv4.ttl = hdr.ipv4.ttl & value;
-    }
-
-    action operation_or(bit<8> value) {
-        hdr.ipv4.ttl = hdr.ipv4.ttl | value;
-    }
+    
 
     action drop() {
         ig_intr_dprsr_md.drop_ctl = 0x1;
     }
 
-    table calculate {
+    action send(bit<9> port, bit<16> sw) {
+        ig_intr_tm_md.ucast_egress_port = port;
+        hdr.rec.sw = sw;
+        
+        
+    }
+
+    table forward {
         key = {
-			hdr.rec.sw_id   : exact;
             hdr.ipv4.dst_addr        : exact;
         }
         actions = {
-            operation_add;
-            operation_xor;
-            operation_and;
-            operation_or;
+            send;
             @defaultonly drop;
         }
         const default_action = drop();
@@ -231,12 +193,14 @@ control SwitchIngress(
 
 
     apply {
+
         if(!hdr.arp.isValid()){
-            calculate.apply();
+            forward.apply();
         }
         ig_intr_tm_md.bypass_egress = 1w1;
-   	ig_intr_tm_md.ucast_egress_port = 196;
-	 }
+
+
+    }
 }
 
 

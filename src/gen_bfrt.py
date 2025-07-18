@@ -30,7 +30,7 @@ def gilbert_elliott_parameters(L, burstiness=0.5):
 
 def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mirror, links_metrics,
                 routing_model, route_ids, edge_links, route_seq, link_seq, route_dest, edge_hosts, name_sw,
-                slice_list, slice_number, slice_metric):
+                slice_list, slice_number, slice_metric, links_port_map):
     links = []
     
     for j in range(len(hosts)):
@@ -66,7 +66,7 @@ def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mir
     p4 = user_p4[-1].split('.')
 
     f.write("from netaddr import IPAddress\n")
-    if (routing_model == 0):
+    if (routing_model == 0 or routing_model == 2):
         f.write("p4p7 = bfrt.p7_default.pipe_p7\n")
     if (routing_model == 1):
         f.write("p4p7 = bfrt.p7_polka.pipe_p7\n")
@@ -110,6 +110,12 @@ def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mir
                 f.write("vlan_fwd.add_with_match(vid=" + str(hosts[i][6]) + ", ingress_port=" + str(hosts[i][2]) + ",   link=" + str(edge_hosts[i][0]) + ")\n")
             if (default_slice == 1):
                 f.write("vlan_fwd.add_with_match(vid=" + str(hosts[i][6]) + ", ingress_port=" + str(hosts[i][2]) + ",   link=" + str(edge_hosts[i][0]) + ", routeIdPacket=" + str(route_ids[default_slice_group[i]]) + ")\n")
+
+        if (routing_model == 2):
+            for j, link in enumerate(links_port_map):
+                if (link[0] == hosts[i][0]) or (link[1] == hosts[i][0]):
+                    f.write("vlan_fwd.add_with_match(vid=" + str(hosts[i][6]) + ", ingress_port=" + str(hosts[i][2]) + ",   link=" + str(j)+ ", portRec=" + str(link[6]) + ")\n") 
+                    
         f.write("\n")
 
     for i in range(len(hosts)):
@@ -121,7 +127,36 @@ def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mir
                 f.write("arp_fwd.add_with_match_arp(vid=" + str(hosts[i][6]) + ", ingress_port=" + str(hosts[i][2]) + ",   link=" + str(edge_hosts[i][0]) + ", routeIdPacket=" + str(route_ids[i]) + ")\n")
             if (default_slice == 1):
                 f.write("arp_fwd.add_with_match_arp(vid=" + str(hosts[i][6]) + ", ingress_port=" + str(hosts[i][2]) + ",   link=" + str(edge_hosts[i][0]) + ", routeIdPacket=" + str(route_ids[default_slice_group[i]]) + ")\n")
+        if (routing_model == 2):
+            for j, link in enumerate(links_port_map):
+                if (link[0] == hosts[i][0]) or (link[1] == hosts[i][0]):
+                    f.write("arp_fwd.add_with_match_arp(vid=" + str(hosts[i][6]) + ", ingress_port=" + str(hosts[i][2]) + ",   link=" + str(j)+ ", portRec=" + str(link[6]) + ")\n")
+        
+        
         f.write("\n")
+
+    #swith_id
+
+    if (routing_model == 2):
+        for i, link in enumerate(links_port_map):
+            f.write("basic_fwd = p4p7.SwitchIngress.basic_fwd\n")
+
+            for h in hosts:
+                if link[0] == h[0]:
+                    f.write("basic_fwd.add_with_send_next(sw=" + str(i) + ", sw_id=222, sw_id_next="+ str(swith_id[link[1]]) + ", portPipe=" + str(link[4]) + ")\n")
+                    f.write("basic_fwd.add_with_send(sw=" + str(i) + ", sw_id=" + str(swith_id[link[1]])+", port="+str(h[2]) + ")\n")
+                elif link[1] == h[0]:
+                    f.write("basic_fwd.add_with_send_next(sw=" + str(i) + ", sw_id=222, sw_id_next="+ str(swith_id[link[0]]) + ", portPipe=" + str(link[4]) + ")\n")
+                    f.write("basic_fwd.add_with_send(sw=" + str(i) + ", sw_id=" + str(swith_id[link[0]])+", port="+str(h[2]) + ")\n")
+                    
+
+            
+            if  any(((link[0]==h[0]) or (link[1]==h[0])) for h in hosts) == False:
+                f.write("basic_fwd.add_with_send_next(sw=" + str(i) + ", sw_id="+ str(swith_id[link[1]])+", sw_id_next="+ str(swith_id[link[0]]) + ", portPipe=" + str(link[4]) + ")\n")            
+                f.write("basic_fwd.add_with_send_next(sw=" + str(i) + ", sw_id="+ str(swith_id[link[0]])+", sw_id_next="+ str(swith_id[link[1]]) + ", portPipe=" + str(link[4]) + ")\n")           
+                
+            #f.write("basic_fwd.add_with_send_next
+
 
     if (routing_model == 0):
         for i in range(len(tableEntries)):

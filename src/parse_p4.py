@@ -36,7 +36,7 @@ def encontrar_chave(string):
 
 
 def editP4(p4_code, u_port,
-		   links, links_rec, rec_bw):
+		   links, links_rec, rec_bw, routing_model):
 
 	#files used
 	p4_original = p4_code # file name of original user p4 code
@@ -82,8 +82,11 @@ def editP4(p4_code, u_port,
 	patternHeaders = "\.*struct\s+headers\s*\{[\s\w;]+ethernet;"
 
 	#rec header
-	rec_header = "header rec_h {\n\tbit<32> ts;\n\tbit<32> num;\n\tbit<32> jitter;\n\tbit<16> sw;\n\tbit<16> sw_id;\n\tbit<16> ether_type;\n\tbit<32> dest_ip;\n\tbit<1> signal;\n\tbit<31> pad;\n\tbit<160> routeid;\n}\n\n"
-	
+	if routing_model == 2:
+		rec_header = "header rec_h {\n\tbit<32> ts;\n\tbit<32> num;\n\tbit<32> jitter;\n\tbit<16> sw;\n\tbit<16> sw_id;\n\tbit<16> ether_type;\n\tbit<1> signal;\n\tbit<7> pad;\n}\n\n"
+	else:
+		rec_header = "header rec_h {\n\tbit<32> ts;\n\tbit<32> num;\n\tbit<32> jitter;\n\tbit<16> sw;\n\tbit<16> sw_id;\n\tbit<16> ether_type;\n\tbit<32> dest_ip;\n\tbit<1> signal;\n\tbit<31> pad;\n\tbit<160> routeid;\n}\n\n"
+
 	#match
 	matchi = re.search(patternHeaders, allContent)
 	st = matchi.start()
@@ -173,30 +176,20 @@ def editP4(p4_code, u_port,
 
 	matchi = re.search(patternApply, allContent[ig3.end():])
 
+
 	mm = encontrar_chave(allContent[ig3.end()+1:])
+
+	#print("posiÃ§ao da")	
+	#print(mm)
+
 
 	st = matchi.start()
 	en = matchi.end()
 
-	new_apply = allContent[ig3.end()+st+8:ig3.end()+en-5]
+	allContent = allContent[:ig3.end()+1 + mm-1] + allContent[ig3.end()+1 + mm-1:]	
 
-	fw_p7 = "\tif ("
-	links_condition = "\tif (hdr.rec.sw == "
-	for i in range(len(links_rec)):
-		if i == 0 :
-			fw_p7 = fw_p7 + "ig_intr_md.ingress_port == " + str(rec_bw[1] + i)
-			links_condition = links_condition + str(links_rec[i]) + "){\n\t\tig_intr_tm_md.ucast_egress_port = " + str(rec_bw[1] + i) + ";\n\t}\n"
-		elif i < (len(links_rec)) and i > 0:
-			fw_p7 = fw_p7 + " || ig_intr_md.ingress_port == " + str(rec_bw[1] + i)
-			links_condition = links_condition + "\telse if (hdr.rec.sw == "+ str(links_rec[i]) + "){\n\t\tig_intr_tm_md.ucast_egress_port = " + str(rec_bw[1] + i) + ";\n\t}\n"
-		if i == (len(links_rec) -1):
-			fw_p7 = fw_p7 + "){\n\t\tig_intr_tm_md.ucast_egress_port = " + str(user_port) + ";\n\t}\n\telse{\n" + new_apply + "\n" + links_condition + "\telse{\n\t\tig_intr_tm_md.ucast_egress_port = " + str(user_port) + ";\n\t}\n\t}\n"
-
-	if different_bw == 1:
-		allContent = allContent[:ig3.end()+st+8] + fw_p7 + allContent[ig3.end()+en-1:]
-	else:
-		allContent = allContent[:ig3.end()+1 + mm-1] + "\tig_intr_tm_md.ucast_egress_port = " + str(user_port) + ";\n\t" + allContent[ig3.end()+1 + mm-1:]	
-
+	
+	#allContent = allContent[:ig3.end()+en-1] + "\tig_intr_tm_md.ucast_egress_port = " + str(user_port) + ";\n\t" + allContent[ig3.end()+en-1:]
 	
 	#allContent = allContent[:ig3.end()+en-1] + "\tig_intr_tm_md.ucast_egress_port = " + str(user_port) + ";\n\t" + allContent[ig3.end()+en-1:]
 

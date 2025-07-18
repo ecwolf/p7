@@ -16,37 +16,90 @@
 
 import re
 
-def generate_port(hosts, links, vlans, rec_bw):
-	
-	#Identify channels in port
-	channel = [0 for i in range(len(hosts))]
-	slot = [0 for x in range(len(hosts))]
-	port = [0 for x in range(len(hosts))]
-	for i in range(len(hosts)):
-		m = re.search('/(.+?)', str(hosts[i][1]))
-		m2 = re.search('(.+?)/', str(hosts[i][1]))
-		if m:
-			channel[i] = 1
-			slot[i] = int(m.group(1))
-			port[i] = int(m2.group(1))
+# função auxiliar para tentar alocar uma porta em um pipe
+def alocar_porta(ports_dict, usados, usado_por_prefixo, bw):
+    # tentamos percorrer por prefixo
+    for chave in ports_dict.keys():
+        if chave in usados:
+            continue
+        prefixo = chave.split("/")[0]
+        # quantas já usei deste prefixo?
+        usadas_no_prefixo = usado_por_prefixo.get(prefixo, set())
 
-	different_bw = 0
-	rec_port_bw = 0
-	values_at_position = [sublist[2] for sublist in links]
-	if len(set(values_at_position)) != 1:
-		different_bw = 1
-		try:
-			index = rec_bw[0].index("/")
-			rec_port_bw = rec_bw[0][0:index]
-		except ValueError:
-			rec_port_bw = rec_bw[0]
-		if rec_bw[1] == 9999:
-			print("Multiple Bandwidth values defined, need an additional recirculation port")
-			print("Use topo.addrec_port_bw(port, D_P)")
-			print("e.g. topo.addrec_port_bw(\"8/-\", 188)")
+        # regra 1: bw > 50 Gbps → só pode usar x/0 e exclusividade
+        if bw > 50_000_000_000:
+            if usadas_no_prefixo:  # já usei alguma desse prefixo
+                continue
+            if chave.endswith("/0"):
+                # aloca
+                usados.add(chave)
+                usado_por_prefixo[prefixo] = {"0","1","2","3"}  # bloqueia todas
+                return chave
+
+        # regra 2: 25 < bw <= 50 Gbps → pode usar x/0 e x/2 no mesmo prefixo
+        elif bw > 25_000_000_000:
+            # se já usei alguma do prefixo, tem que respeitar a combinação
+            if usadas_no_prefixo and not (usadas_no_prefixo <= {"0","2"}):
+                # já tinha usado uma porta que não é 0 ou 2 nesse prefixo
+                continue
+            # posso usar x/0 ou x/2, se ainda não usados nesse prefixo
+            if chave.endswith("/0") and "0" not in usadas_no_prefixo:
+                usados.add(chave)
+                usado_por_prefixo.setdefault(prefixo, set()).add("0")
+                return chave
+            if chave.endswith("/2") and "2" not in usadas_no_prefixo:
+                usados.add(chave)
+                usado_por_prefixo.setdefault(prefixo, set()).add("2")
+                return chave
+
+        # regra 3: bw <= 25 Gbps → posso usar x/0,x/1,x/2,x/3 livremente
+        else:
+            if chave.split("/")[1] not in usadas_no_prefixo:
+                usados.add(chave)
+                usado_por_prefixo.setdefault(prefixo, set()).add(chave.split("/")[1])
+                return chave
+
+    # se não conseguiu alocar
+    return None
+
+
+
+
+
+
+def generate_port(hosts, links, vlans, rec_bw, ports_pipe0, ports_pipe1):
+	
+
+	#testing
+
+	# Conjunto para marcar portas ocupadas em cada pipe
+	usados_pipe0 = set()
+	usados_pipe1 = set()
+    # Para controlar prefixos e quantas portas foram usadas deles
+	usado_por_prefixo_pipe0 = {}
+	usado_por_prefixo_pipe1 = {}
+
+    # lista de saída
+	links_port_map = []
+
+
+
+	#Creating the pairs of loopback ports for each link
+	links_port_map = []
+	for i in range(len(links)):
+		chave0 = alocar_porta(ports_pipe0, usados_pipe0, usado_por_prefixo_pipe0, links[i][2])
+		chave1 = alocar_porta(ports_pipe1, usados_pipe1, usado_por_prefixo_pipe1, links[i][2])
+
+		if chave0 is None or chave1 is None:
+			print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")
 			exit()
 
-	print(rec_port_bw)
+
+		port_map_entry = [links[i][0], links[i][1], links[i][2], chave0, ports_pipe0[chave0], chave1, ports_pipe1[chave1]]
+	
+		links_port_map.append(port_map_entry)
+
+	print(links_port_map)
 
 	f = open("./files/ports_config.txt", "w")
 
@@ -54,9 +107,7 @@ def generate_port(hosts, links, vlans, rec_bw):
 	f.write("ucli\n")
 	f.write("pm\n")
 
-	a = 0
-	links_rec = []
-	#Ports configuration
+	#Ports host configuration
 	for i in range(len(hosts)):
 		if hosts[i][5] == "False":
 			feec = "NONE"
@@ -64,50 +115,38 @@ def generate_port(hosts, links, vlans, rec_bw):
 		f.write("port-enb " + str(hosts[i][1]) + "\n")
 		if hosts[i][4] == "False":
 			f.write("an-set " + str(hosts[i][1]) + " 2" + "\n")
-		if different_bw == 1 and a == 0 :
-			for l in range(len(links)):
-				if links[l][2] < hosts[i][3]:
-					if a == 4:
-						print("Only 4 different Bandwidth available")
-						exit()
-					f.write("port-add " + str(rec_port_bw) + "/" + str(a) + " " + "10" + "G NONE\n")
-					f.write("port-loopback " + str(rec_port_bw) + "/" + str(a) + " mac-near\n")
-					f.write("port-enb " + str(rec_port_bw) + "/" + str(a) + "\n")
-					links_rec.append(l)
-					a += 1
-	#Vlan ports configuration
-	for i in range(len(vlans)):
-		if vlans[i][4] == "False":
-			feec = "NONE"
-		f.write("port-add " + str(vlans[i][0]) + " " + str(int(vlans[i][2]/1000000000)) + "G" + " " + str(feec) + "\n")
-		f.write("port-enb " + str(vlans[i][0]) + "\n")
-		if vlans[i][3] == "False":
-			f.write("an-set " + str(vlans[i][0]) + " 2" + "\n")
+			f.write("port-dis " + str(hosts[i][1]) + "\n")
+			f.write("port-enb " + str(hosts[i][1]) + "\n")
 
-	f.write("port-dis -/-" + "\n")
-	f.write("port-enb -/-" + "\n")
+	#Ports link configuration
+	for i in range(len(links_port_map)):
+		if links_port_map[i][2] > 50000000000:
+			f.write("port-add " + str(links_port_map[i][3]) + " 100G" + " NONE\n")
+			f.write("port-loopback " + str(links_port_map[i][3]) + " mac-near\n")
+			f.write("port-enb " + str(links_port_map[i][3]) + "\n")
+			f.write("port-add " + str(links_port_map[i][5]) + " 100G" + " NONE\n")
+			f.write("port-loopback " + str(links_port_map[i][5]) + " mac-near\n")
+			f.write("port-enb " + str(links_port_map[i][5]) + "\n")
+		elif links_port_map[i][2] > 25000000000:
+			f.write("port-add " + str(links_port_map[i][3]) + " 50G" + " NONE\n")
+			f.write("port-loopback " + str(links_port_map[i][3]) + " mac-near\n")
+			f.write("port-enb " + str(links_port_map[i][3]) + "\n")
+			f.write("port-add " + str(links_port_map[i][5]) + " 50G" + " NONE\n")
+			f.write("port-loopback " + str(links_port_map[i][5]) + " mac-near\n")
+			f.write("port-enb " + str(links_port_map[i][5]) + "\n")
+		else:
+			f.write("port-add " + str(links_port_map[i][3]) + " 25G" + " NONE\n")
+			f.write("port-loopback " + str(links_port_map[i][3]) + " mac-near\n")
+			f.write("port-enb " + str(links_port_map[i][3]) + "\n")
+			f.write("port-add " + str(links_port_map[i][5]) + " 25G" + " NONE\n")
+			f.write("port-loopback " + str(links_port_map[i][5]) + " mac-near\n")
+			f.write("port-enb " + str(links_port_map[i][5]) + "\n")
+
 	f.write("show" + "\n")
 
-	a = 0
-	if (len(hosts) > 0):
-		f.write("exit" + "\n")
-		f.write("bfrt_python" + "\n")
-		for i in range(len(hosts)):
-			if (hosts[i][3] > links[i][2] and len(links) <= 2):
-				f.write("tf1.tm.port.sched_cfg.mod(dev_port=" + str(hosts[i][2]) + ", max_rate_enable=True)\n")
-			if (len(links) > 1 and different_bw == 0):
-				if (hosts[i][3] > links[i][2] and len(links) <= 2):
-					f.write("tf1.tm.port.sched_shaping.mod(dev_port=" + str(hosts[i][2]) + ", unit='BPS', provisioning='MIN_ERROR', max_rate=" + str(int(links[i][2]/1000)) + ", max_burst_size=9000)" + "\n")
-			else:
-				if (hosts[i][3] > links[i][2] and len(links) <= 2):
-					f.write("tf1.tm.port.sched_shaping.mod(dev_port=" + str(hosts[i][2]) + ", unit='BPS', provisioning='MIN_ERROR', max_rate=" + str(int(links[i][2]/1000)) + ", max_burst_size=9000)" + "\n")
-			if different_bw == 1 and a == 0 and len(links) > 2:
-				for l in range(len(links)):
-					if links[l][2] < hosts[i][3]:
-						f.write("tf1.tm.port.sched_cfg.mod(dev_port=" + str(rec_bw[1] + a) + ", max_rate_enable=True)\n")
-						f.write("tf1.tm.port.sched_shaping.mod(dev_port=" + str(rec_bw[1] + a) + ", unit='BPS', provisioning='MIN_ERROR', max_rate=" + str(int(links[l][2]/1000)) + ", max_burst_size=9000)" + "\n")
-						a += 1
+
+	
 
 	f.close()
 
-	return links_rec
+	return links_port_map

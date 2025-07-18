@@ -20,12 +20,12 @@ def gen_multiple(p4_code, routing_model):
     p4_original = p4_code # file name of original user p4 code
     p4_name = p4_original.split(".")
     if p4_name[0].find('/') != -1:
-    	p4_copy = p4_name[0].split("/")
-    	p4_copy = p4_copy[-1] + "_mod"
+        p4_copy = p4_name[0].split("/")
+        p4_copy = p4_copy[-1] + "_mod"
     else:
     	p4_copy = p4_name[0] + "_mod"	
-
-    if (routing_model == 0):
+    
+    if (routing_model == 0 or routing_model == 2):
         p7_p4code = "p7_default"
     if (routing_model == 1):
         p7_p4code = "p7_polka"

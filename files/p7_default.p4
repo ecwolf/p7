@@ -87,7 +87,6 @@ parser SwitchIngressParser(
 
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
-        transition accept;
     }
 
     state parse_rec {
@@ -241,14 +240,14 @@ control SwitchIngress(
     // Send packet to the next internal switch 
     // Reset the initial timestamp
     // Increase the ID of the switch
-    action send_next(bit<16> link_id, bit<16> sw_id) {
+    action send_next(bit<16> sw_id_next, bit<9> portPipe) {
+        // User routing
         hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];
         hdr.rec.num = 1;
 
-        hdr.rec.sw = link_id;
-        hdr.rec.sw_id = sw_id;
+        hdr.rec.sw_id = sw_id_next;
 
-        ig_intr_tm_md.ucast_egress_port = port_user;
+        ig_intr_tm_md.ucast_egress_port = portPipe;
     }
 
     // Forward a packet directly without any P7 processing
@@ -284,12 +283,11 @@ control SwitchIngress(
     // Save the initial timestamp (ingress_mac_tstamp) in the recirculation header - ts
     // Set the starting number of recirculation - num
     // Set the ID of the first switch - sw
-    action match(bit<16> link) {
+    action match(bit<16> link, bit<9> portRec) {
         hdr.rec.setValid();
         hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];
         hdr.rec.num = 1;
         hdr.rec.sw = link;
-        hdr.rec.dest_ip = hdr.ipv4.dst_addr;
         hdr.rec.ether_type = hdr.ethernet.ether_type;
         hdr.vlan_tag.vid = p7_vlan;
 
@@ -298,16 +296,16 @@ control SwitchIngress(
 
         hdr.ethernet.ether_type = 0x9966;
 
-        ig_intr_tm_md.ucast_egress_port = rec_port;
+        hdr.rec.sw_id = 222; // Set the switch ID to 222 for user routing
+        ig_intr_tm_md.ucast_egress_port = portRec;
         ig_intr_tm_md.bypass_egress = 1w1;
     }
 
-    action match_arp(bit<16> link) {
+    action match_arp(bit<16> link, bit<9> portRec) {
         hdr.rec.setValid();
         hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];
         hdr.rec.num = 1;
         hdr.rec.sw = link;
-        hdr.rec.dest_ip = hdr.arp.dest_ip;
         hdr.rec.ether_type = hdr.ethernet.ether_type;
         hdr.vlan_tag.vid = p7_vlan;
 
@@ -316,7 +314,8 @@ control SwitchIngress(
 
         hdr.ethernet.ether_type = 0x9966;
 
-        ig_intr_tm_md.ucast_egress_port = rec_port;
+        hdr.rec.sw_id = 222; // Set the switch ID to 222 for user routing
+        ig_intr_tm_md.ucast_egress_port = portRec;
         ig_intr_tm_md.bypass_egress = 1w1;
     }
 
@@ -329,7 +328,7 @@ control SwitchIngress(
     table basic_fwd {
         key = {
             hdr.rec.sw : exact;
-            hdr.rec.dest_ip   : exact;
+            hdr.rec.sw_id : exact;
         }
         actions = {
             send_next;

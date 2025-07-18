@@ -22,7 +22,7 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 	
 	current_year = datetime.datetime.now().year
 
-	if (routing_model == 0):
+	if (routing_model == 0 or routing_model == 2):
 		model = "default"
 	if (routing_model == 1):
 		model = "polka"
@@ -382,14 +382,24 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 			f.write("        md.ndata = (bit<144>) (hdr.rec.routeid >> 16);\n")
 			f.write("        md.diff = (bit<16>) hdr.rec.routeid;\n")
 		f.write("\n")
+	if (routing_model == 2):
+		f.write("    action send_next(bit<16> sw_id_next, bit<9> portPipe) {\n")
+		f.write("        // User routing\n")
 	f.write("        hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];\n")
 	f.write("        hdr.rec.num = 1;\n")
 	f.write("\n")
 	if (routing_model == 0):
 		f.write("        hdr.rec.sw = link_id;\n")
-	f.write("        hdr.rec.sw_id = sw_id;\n")
+
+	if (routing_model == 2):
+		f.write("        hdr.rec.sw_id = sw_id_next;\n")
+	else:			
+		f.write("        hdr.rec.sw_id = sw_id;\n")
 	f.write("\n")
-	f.write("        ig_intr_tm_md.ucast_egress_port = port_user;\n")
+	if (routing_model == 2):
+		f.write("        ig_intr_tm_md.ucast_egress_port = portPipe;\n")
+	else:	
+		f.write("        ig_intr_tm_md.ucast_egress_port = port_user;\n")
 	f.write("    }\n")
 	f.write("\n")
 
@@ -443,11 +453,14 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 		f.write("    action match(bit<16> link) {\n")
 	if (routing_model == 1 and default_slice == 1):
 		f.write("    action match(bit<16> link, bit<160> routeIdPacket) {\n")
+	if (routing_model == 2):
+		f.write("    action match(bit<16> link, bit<9> portRec) {\n")	
 	f.write("        hdr.rec.setValid();\n")
 	f.write("        hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];\n")
 	f.write("        hdr.rec.num = 1;\n")
 	f.write("        hdr.rec.sw = link;\n")
-	f.write("        hdr.rec.dest_ip = hdr.ipv4.dst_addr;\n")
+	if (routing_model != 2):
+		f.write("        hdr.rec.dest_ip = hdr.ipv4.dst_addr;\n")
 	f.write("        hdr.rec.ether_type = hdr.ethernet.ether_type;\n")
 	f.write("        hdr.vlan_tag.vid = p7_vlan;\n")
 	f.write("\n")
@@ -459,7 +472,11 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 	if (routing_model == 1 and default_slice == 1):
 		f.write("        hdr.rec.routeid = routeIdPacket;\n")
 		f.write("\n")
-	f.write("        ig_intr_tm_md.ucast_egress_port = rec_port;\n")
+	if (routing_model == 2):
+		f.write("        hdr.rec.sw_id = 222; // Set the switch ID to 222 for user routing\n")
+		f.write("        ig_intr_tm_md.ucast_egress_port = portRec;\n")
+	else:
+		f.write("        ig_intr_tm_md.ucast_egress_port = rec_port;\n")
 	f.write("        ig_intr_tm_md.bypass_egress = 1w1;\n")
 	f.write("    }\n")
 
@@ -468,11 +485,14 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 		f.write("    action match_arp(bit<16> link) {\n")
 	if (routing_model == 1):
 		f.write("    action match_arp(bit<16> link, bit<160> routeIdPacket) {\n")
+	if (routing_model == 2):
+		f.write("    action match_arp(bit<16> link, bit<9> portRec) {\n")	
 	f.write("        hdr.rec.setValid();\n")
 	f.write("        hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];\n")
 	f.write("        hdr.rec.num = 1;\n")
 	f.write("        hdr.rec.sw = link;\n")
-	f.write("        hdr.rec.dest_ip = hdr.arp.dest_ip;\n")
+	if (routing_model != 2):
+		f.write("        hdr.rec.dest_ip = hdr.arp.dest_ip;\n")
 	f.write("        hdr.rec.ether_type = hdr.ethernet.ether_type;\n")
 	f.write("        hdr.vlan_tag.vid = p7_vlan;\n")
 	f.write("\n")
@@ -484,7 +504,11 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 	if (routing_model == 1):
 		f.write("        hdr.rec.routeid = routeIdPacket;\n")
 		f.write("\n")
-	f.write("        ig_intr_tm_md.ucast_egress_port = rec_port;\n")
+	if (routing_model == 2):
+		f.write("        hdr.rec.sw_id = 222; // Set the switch ID to 222 for user routing\n")
+		f.write("        ig_intr_tm_md.ucast_egress_port = portRec;\n")
+	else:	
+		f.write("        ig_intr_tm_md.ucast_egress_port = rec_port;\n")
 	f.write("        ig_intr_tm_md.bypass_egress = 1w1;\n")
 	f.write("    }\n")
 
@@ -508,7 +532,10 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 	f.write("    table basic_fwd {\n")
 	f.write("        key = {\n")
 	f.write("            hdr.rec.sw : exact;\n")
-	f.write("            hdr.rec.dest_ip   : exact;\n")
+	if (routing_model == 2):
+		f.write("            hdr.rec.sw_id : exact;\n")
+	else:
+		f.write("            hdr.rec.dest_ip   : exact;\n")
 	f.write("        }\n")
 	f.write("        actions = {\n")
 	f.write("            send_next;\n")

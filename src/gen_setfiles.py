@@ -44,7 +44,7 @@ def gen_set_files(p4_code, routing_model):
     f.write("#!/bin/bash\n")
     f.write("\n")
     f.write("cp files/p4rt.py p4src/p4rt/\n")
-    if (routing_model == 0):
+    if (routing_model == 0 or routing_model == 2):
         f.write("cp files/p7_default.p4 p4src/\n")
     if (routing_model == 1):
         f.write("cp files/p7_polka.p4 p4src/\n")

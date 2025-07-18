@@ -1,23 +1,97 @@
 ucli
 pm
-port-add 1/0 10G NONE
+port-add 5/0 100G NONE
+port-enb 5/0
+an-set 5/0 2
+port-dis 5/0
+port-enb 5/0
+port-add 6/0 100G NONE
+port-enb 6/0
+an-set 6/0 2
+port-dis 6/0
+port-enb 6/0
+port-add 9/0 100G NONE
+port-loopback 9/0 mac-near
+port-enb 9/0
+port-add 1/0 100G NONE
+port-loopback 1/0 mac-near
 port-enb 1/0
-an-set 1/0 2
-port-add 16/0 10G NONE
+port-add 10/0 100G NONE
+port-loopback 10/0 mac-near
+port-enb 10/0
+port-add 2/0 100G NONE
+port-loopback 2/0 mac-near
+port-enb 2/0
+port-add 11/0 100G NONE
+port-loopback 11/0 mac-near
+port-enb 11/0
+port-add 3/0 100G NONE
+port-loopback 3/0 mac-near
+port-enb 3/0
+port-add 12/0 100G NONE
+port-loopback 12/0 mac-near
+port-enb 12/0
+port-add 4/0 100G NONE
+port-loopback 4/0 mac-near
+port-enb 4/0
+port-add 13/0 100G NONE
+port-loopback 13/0 mac-near
+port-enb 13/0
+port-add 7/0 100G NONE
+port-loopback 7/0 mac-near
+port-enb 7/0
+port-add 14/0 100G NONE
+port-loopback 14/0 mac-near
+port-enb 14/0
+port-add 8/0 100G NONE
+port-loopback 8/0 mac-near
+port-enb 8/0
+port-add 15/0 100G NONE
+port-loopback 15/0 mac-near
+port-enb 15/0
+port-add 25/0 100G NONE
+port-loopback 25/0 mac-near
+port-enb 25/0
+port-add 16/0 100G NONE
 port-loopback 16/0 mac-near
 port-enb 16/0
-port-add 16/1 10G NONE
-port-loopback 16/1 mac-near
-port-enb 16/1
-port-add 1/2 10G NONE
-port-enb 1/2
-an-set 1/2 2
-port-dis -/-
-port-enb -/-
+port-add 26/0 100G NONE
+port-loopback 26/0 mac-near
+port-enb 26/0
+port-add 17/0 100G NONE
+port-loopback 17/0 mac-near
+port-enb 17/0
+port-add 27/0 100G NONE
+port-loopback 27/0 mac-near
+port-enb 27/0
+port-add 18/0 100G NONE
+port-loopback 18/0 mac-near
+port-enb 18/0
+port-add 28/0 100G NONE
+port-loopback 28/0 mac-near
+port-enb 28/0
+port-add 19/0 100G NONE
+port-loopback 19/0 mac-near
+port-enb 19/0
+port-add 29/0 100G NONE
+port-loopback 29/0 mac-near
+port-enb 29/0
+port-add 20/0 100G NONE
+port-loopback 20/0 mac-near
+port-enb 20/0
+port-add 30/0 100G NONE
+port-loopback 30/0 mac-near
+port-enb 30/0
+port-add 21/0 100G NONE
+port-loopback 21/0 mac-near
+port-enb 21/0
+port-add 31/0 100G NONE
+port-loopback 31/0 mac-near
+port-enb 31/0
+port-add 22/0 100G NONE
+port-loopback 22/0 mac-near
+port-enb 22/0
+port-add 32/0 100G NONE
+port-loopback 32/0 mac-near
+port-enb 32/0
 show
-exit
-bfrt_python
-tf1.tm.port.sched_cfg.mod(dev_port=132, max_rate_enable=True)
-tf1.tm.port.sched_shaping.mod(dev_port=132, unit='BPS', provisioning='MIN_ERROR', max_rate=1000000, max_burst_size=9000)
-tf1.tm.port.sched_cfg.mod(dev_port=134, max_rate_enable=True)
-tf1.tm.port.sched_shaping.mod(dev_port=134, unit='BPS', provisioning='MIN_ERROR', max_rate=2000000, max_burst_size=9000)

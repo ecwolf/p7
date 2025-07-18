@@ -40,18 +40,33 @@ header ethernet_h {
     bit<16> ether_type;
 }
 
+/*original
 header rec_h {
-    bit<32> ts;
-    bit<32> num;
-    bit<32> jitter;
-    bit<16> sw;
-    bit<16> sw_id;
-    bit<16> ether_type;
-    bit<32> dest_ip;
-    bit<1> signal;
-    bit<31> pad;
-    bit<160> routeid;
+	bit<32> ts;
+	bit<32> num;
+	bit<32> jitter;
+	bit<16> sw;
+	bit<16> sw_id;
+	bit<16> ether_type;
+	bit<32> dest_ip;
+	bit<1> signal;
+	bit<31> pad;
+	bit<160> routeid;
 }
+*/
+header rec_h {
+	bit<32> ts;
+	bit<32> num;
+	bit<32> jitter;
+	bit<16> sw;
+	bit<16> sw_id;
+	bit<16> ether_type;
+	//bit<32> dest_ip;
+	bit<1> signal;
+	bit<7> pad;
+	//bit<160> routeid;
+}
+
 
 header vlan_tag_h {
     bit<3> pcp;

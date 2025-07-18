@@ -56,6 +56,12 @@ class generator:
                 self.port_user = 128
                 self.rec_port_bw = ["9999", 9999]
                 self.links_rec = []
+                self.links_port_map = [] #links with ports
+
+                self.ports = {} #all ph ports
+                self.pipeline_0_ports = {} #ports from pipe 0 OBS: just ports with no host connected
+                self.pipeline_1_ports = {} #ports from pipe 1 OBS: just ports with no host connected
+
 
                 #Table
                 self.table_name = []
@@ -110,8 +116,27 @@ class generator:
                 self.p4_code = p4
 
         def addhost(self, name, port, D_P, speed_bps, AU, FEC, vlan, ip):
-                host_data = [name,port, D_P, speed_bps, AU, FEC, vlan, ip]
+                if not self.ports:
+                        error = "ERROR: You not defined the file with your ports information"
+                        print(error)
+                        print("Please use the command addports_file(filename) to refer to your ports configuration file")
+                        exit()
+
+                host_data = [name, port, D_P, speed_bps, AU, FEC, vlan, ip]
                 self.host.append(host_data)
+
+
+                prefix = port.split('/')[0] + '/'
+
+                #removing from the list of available ports. As i don't know in which pipe it is, i try to remove from both
+                for key in list(self.pipeline_0_ports.keys()):
+                        if key.startswith(prefix):
+                                self.pipeline_0_ports.pop(key, None)
+                for key in list(self.pipeline_1_ports.keys()):
+                        if key.startswith(prefix):
+                                self.pipeline_1_ports.pop(key, None)
+                #self.pipeline_0_ports.pop(port, None)
+                #self.pipeline_1_ports.pop(port, None)
 
         def addlink(self, node1, node2, bw, pkt_loss, latency, jitter, percent, pkt_loss_model=1):
                 if (pkt_loss == 0):
@@ -179,6 +204,28 @@ class generator:
                         print("- TCP")
                         print("- UDP (Default)")
                         print("- ToS (IPv4)")
+
+        def addports_file(self, filename):
+
+                # --- Leitura e parsing do arquivo ---
+                with open(filename, 'r') as f:
+                        for line in f:
+                                if '|' in line and not line.strip().startswith('PORT'):
+                                        parts = [part.strip() for part in line.strip().split('|')]
+                                        if len(parts) >= 3:
+                                                port = parts[0]
+                                                dp = parts[2]
+                                                if port and dp.isdigit():
+                                                        dp_val = int(dp)
+                                                        self.ports[port] = dp_val
+                                                        if 0 <= dp_val <= 63:
+                                                                self.pipeline_0_ports[port] = dp_val
+                                                        elif 128 <= dp_val <= 191:
+                                                                self.pipeline_1_ports[port] = dp_val
+
+                print(self.pipeline_1_ports)
+                print(self.pipeline_0_ports)
+
 
         def addaction(self, name):
                 self.action_name.append(name)
@@ -254,7 +301,10 @@ class generator:
                             print("port: %s (ID: %s) \n\tspeed: %s \n\tAU: %s \n\tFEC: %s" %(self.vlan_port[i][0],self.vlan_port[i][1],self.vlan_port[i][2],self.vlan_port[i][3],self.vlan_port[i][4]))
 
                 print("\nGenrating Ports Config...")
-                self.links_rec = generate_port(self.host, self.link, self.vlan_port, self.rec_port_bw)
+                self.links_port_map = generate_port(self.host, self.link, self.vlan_port, self.rec_port_bw, self.pipeline_0_ports, self.pipeline_1_ports)
+
+                #print(self.pipeline_0_ports)
+                #print(self.pipeline_1_ports)
 
         def generate_p4rt(self):
                 if (len(self.vlan_link) == 0 and len(self.vlan_port) > 0 ):
@@ -279,6 +329,11 @@ class generator:
                 elif(self.routing_model == 1):
                         #PolKA
                         print("\nDefining routing model - PolKA...")
+                elif(self.routing_model == 2):
+                        #User defined routing
+                        print("\nDefining routing model - User defined routing...")
+                        #self.tableEnt, self.tableEnt_dijkstra = generateTableEntries(self.host, self.name_sw, self.link, self.sw_ids)
+                        #generate_rt(self.stratum_ip, self.host, self.vlan_link, self.tableEnt)
                 else:
                         print("\nNot a valid routing model defined...")
                         exit()
@@ -309,7 +364,7 @@ class generator:
 
                 generate_bf(self.host, self.vlan_link, self.tableEnt, self.tableinfo, self.sw_ids, self.p4_code, self.mirrorinfo, self.link,
                             self.routing_model, self.route_ids, self.edge_links, self.route_seq, self.link_seq, self.route_dest, self.edge_hosts, self.name_sw, # PolKa
-                            self.slice, self.slice_number, self.slice_metric) # Slice
+                            self.slice, self.slice_number, self.slice_metric, self.links_port_map) # Slice
 
 
         def generate_p4code(self):
@@ -330,10 +385,19 @@ class generator:
                 print("\nNetwork Topology created files/topo.png\n")
                 gen_topo(self.tableEnt_dijkstra)
 
+        def printSwitches(self):
+                if self.routing_model == 2:
+                        print("\nSwitches defined, how to identify them and how to create the table entries\nSwitches defined:")
+                        for i in range(len(self.name_sw)):
+                                print("\tSwitch %s" % self.name_sw[i]+" (ID (rec.sw_id): %s)" % self.sw_ids[self.name_sw[i]])
+                                for id, link in enumerate(self.links_port_map):
+                                        if link[0] == self.name_sw[i] or link[1] == self.name_sw[i]:
+                                                print("\t\tTo forward to link %s <--> %s  use rec.sw = %s  and ucast_egress_port = %s" % (link[0], link[1], id, link[6]))
+
         def parse_usercode(self):
                 print("\nParsing User P4 Code\n")
                 if (self.p4_code != ''):
-                        editP4(self.p4_code, self.rec_port, self.link, self.links_rec, self.rec_port_bw)     # Recirculation bandwidth)
+                        editP4(self.p4_code, self.rec_port, self.link, self.links_rec, self.rec_port_bw, self.routing_model)     # Recirculation bandwidth)
                 else:
                         print("\nNo P4 Code defined\n")
 
