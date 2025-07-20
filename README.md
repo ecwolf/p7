@@ -1,7 +1,7 @@
 P7 (P4 Programmable Patch Panel): an instant 100G emulated network testbed in a pizza box
 ==
 
-## Updates of this branch: routing exposed to the user and using loopback ports used to increase P7 scalability.
+## Updates of this branch: routing exposed to the user and using loopback ports to increase P7 scalability.
 Now each link created using P7 will map this link to a pair of loopback ports to process this link. It increases the P7 scalability to up to 14 links of 100Gbps (considering Tofino 1 of 32 ports and two physical hosts connected).
 
 ### Important assumptions/limitations:
