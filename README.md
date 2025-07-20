@@ -39,7 +39,7 @@ python3 main.py -c
 
 If is everything OK, after the codes compile you will receive an output like that: 
 ```
-#example with two switches and three hosts in the topology.
+#example with two switches and two hosts in the topology.
 Switches defined:
         Switch sw1 (ID (rec.sw_id): 0)
                 To forward to link h1 <--> sw1  use rec.sw = 0  and ucast_egress_port = 132
