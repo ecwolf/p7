@@ -27,6 +27,7 @@ from src.parse_p4 import *
 from src.gen_routeids import *
 from src.gen_setfiles import *
 from src.gen_multiple import *
+from src.gen_headers import *
 
 import argparse
 import os
@@ -380,6 +381,8 @@ class generator:
                 generate_p4(self.rec_port, self.port_user, self.name_sw, self.host, self.link, 
                             self.routing_model, self.route_ids, self.dec_s, self.route_seq, self.edge_hosts, self.routing_crc, # PolKa
                             self.slice, self.slice_metric) # Slice
+
+                generate_headers(self.routing_model)
 
         def generate_graph(self):
                 print("\nNetwork Topology created files/topo.png\n")

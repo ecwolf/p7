@@ -83,7 +83,8 @@ def editP4(p4_code, u_port,
 
 	#rec header
 	if routing_model == 2:
-		rec_header = "header rec_h {\n\tbit<32> ts;\n\tbit<32> num;\n\tbit<32> jitter;\n\tbit<16> sw;\n\tbit<16> sw_id;\n\tbit<16> ether_type;\n\tbit<1> signal;\n\tbit<7> pad;\n}\n\n"
+		#rec_header = "header rec_h {\n\tbit<32> ts;\n\tbit<32> num;\n\tbit<32> jitter;\n\tbit<16> sw;\n\tbit<16> sw_id;\n\tbit<16> ether_type;\n\tbit<1> signal;\n\tbit<7> pad;\n}\n\n"
+		rec_header = "header rec_h {\n\tbit<32> ts;\n\tbit<16> sw;\n\tbit<16> sw_id;\n\tbit<16> ether_type;\n}\n\n"
 	else:
 		rec_header = "header rec_h {\n\tbit<32> ts;\n\tbit<32> num;\n\tbit<32> jitter;\n\tbit<16> sw;\n\tbit<16> sw_id;\n\tbit<16> ether_type;\n\tbit<32> dest_ip;\n\tbit<1> signal;\n\tbit<31> pad;\n\tbit<160> routeid;\n}\n\n"
 
