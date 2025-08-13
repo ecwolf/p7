@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2024 INTRIG
+ * Copyright 2025 INTRIG
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,33 +40,13 @@ header ethernet_h {
     bit<16> ether_type;
 }
 
-/*original
+//optimized for user routing
 header rec_h {
-	bit<32> ts;
-	bit<32> num;
-	bit<32> jitter;
-	bit<16> sw;
-	bit<16> sw_id;
-	bit<16> ether_type;
-	bit<32> dest_ip;
-	bit<1> signal;
-	bit<31> pad;
-	bit<160> routeid;
+    bit<32> ts;
+    bit<16> sw;
+    bit<16> sw_id;
+    bit<16> ether_type;
 }
-*/
-header rec_h {
-	bit<32> ts;
-	bit<32> num;
-	bit<32> jitter;
-	bit<16> sw;
-	bit<16> sw_id;
-	bit<16> ether_type;
-	//bit<32> dest_ip;
-	bit<1> signal;
-	bit<7> pad;
-	//bit<160> routeid;
-}
-
 
 header vlan_tag_h {
     bit<3> pcp;
@@ -186,21 +166,21 @@ struct header_t {
     tcp_h tcp;
     udp_h udp;
     rec_h rec;
-    // Add more headers here.
 }
 
 struct headers {
     ethernet_h   ethernet;
     rec_h        rec;
     vlan_tag_h   vlan_tag;
-    arp_h   arp;
+    arp_h       arp;
     ipv4_h       ipv4;
     tcp_h       tcp;
     udp_h       udp;
 }
 
-struct empty_header_t {}
-
-struct empty_metadata_t {}
+struct empty_header_t {
+}
+struct empty_metadata_t {
+}
 
 #endif /* _HEADERS_ */

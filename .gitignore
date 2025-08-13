@@ -24,3 +24,5 @@ Thumbs.db
 *.pyc
 p4src/output_dir/*
 files/*
+bf_drivers.log*
+*.log

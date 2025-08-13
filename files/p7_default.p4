@@ -230,7 +230,6 @@ control SwitchIngress(
     // Remove the recirculation header
     // Set back the ethertype of the original packet
     action send(PortId_t port) {
-        //hdr.ethernet.src_addr[31:0] = hdr.rec.num;
         hdr.ethernet.ether_type = hdr.rec.ether_type;
         ig_intr_tm_md.ucast_egress_port = port;
         hdr.rec.setInvalid();
@@ -243,7 +242,6 @@ control SwitchIngress(
     action send_next(bit<16> sw_id_next, bit<9> portPipe) {
         // User routing
         hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];
-        hdr.rec.num = 1;
 
         hdr.rec.sw_id = sw_id_next;
 
@@ -258,8 +256,7 @@ control SwitchIngress(
     // Recirculate the packet to the recirculation port
     // Increase the recirculation number
     action recirculate(PortId_t recirc_port){
-        ig_intr_tm_md.ucast_egress_port = recirc_port;
-        hdr.rec.num = hdr.rec.num + 1;      // using new header
+        ig_intr_tm_md.ucast_egress_port = ig_intr_md.ingress_port;
     }
 
     // Calculate the difference between the initial timestamp a the current timestamp
@@ -267,15 +264,6 @@ control SwitchIngress(
         md.ts_diff = ig_intr_md.ingress_mac_tstamp[31:0] - hdr.rec.ts;
     }
 
-    // increases jitter in the timestamp difference
-    action apply_more_jitter(){
-	 	md.ts_diff = md.ts_diff + hdr.rec.jitter;
-    }
-
-    // decreases jitter in the timestamp difference
-    action apply_less_jitter(){
-    	md.ts_diff = md.ts_diff - hdr.rec.jitter;
-    }
 
     // Match incoming packet
     // Add recirculation header
@@ -286,13 +274,10 @@ control SwitchIngress(
     action match(bit<16> link, bit<9> portRec) {
         hdr.rec.setValid();
         hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];
-        hdr.rec.num = 1;
         hdr.rec.sw = link;
         hdr.rec.ether_type = hdr.ethernet.ether_type;
         hdr.vlan_tag.vid = p7_vlan;
 
-        hdr.rec.jitter = md.jitter_metadata;
-        hdr.rec.signal = md.signal_metadata;
 
         hdr.ethernet.ether_type = 0x9966;
 
@@ -304,13 +289,10 @@ control SwitchIngress(
     action match_arp(bit<16> link, bit<9> portRec) {
         hdr.rec.setValid();
         hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];
-        hdr.rec.num = 1;
         hdr.rec.sw = link;
         hdr.rec.ether_type = hdr.ethernet.ether_type;
         hdr.vlan_tag.vid = p7_vlan;
 
-        hdr.rec.jitter = md.jitter_metadata;
-        hdr.rec.signal = md.signal_metadata;
 
         hdr.ethernet.ether_type = 0x9966;
 
@@ -372,19 +354,6 @@ control SwitchIngress(
 
 
     apply {
-        //sets the jitter to be applied
-	 	if(!hdr.rec.isValid()){
-	    	bit<7> P = percent.get();
-	    	if(P <= percentTax){
-	        	md.jitter_metadata = constJitter;
-				md.signal_metadata = signalSelector.get();
-	    	}
-	    	else{
-				md.jitter_metadata = 0;
-				md.signal_metadata = 0;
-	    	}
-	  	}
-	  	
         // Validate if the incoming packet has VLAN header
         // Match the VLAN_ID with P7
         if (hdr.vlan_tag.isValid() && !hdr.rec.isValid() && !hdr.arp.isValid()) {
@@ -401,13 +370,6 @@ control SwitchIngress(
                     bit<16> select_sw = hdr.rec.sw;
                     md.ts_diff = 0;
                     comp_diff();
-    		     	//apply the jitter
-		     		if(hdr.rec.signal==0){
-		         		apply_more_jitter();
-      		     	}else{
-   		         		if(ax_action.execute(1)==1)
-		     	     		apply_less_jitter();
-		     		 	}
                     if (tscal_action.execute(select_sw) == 1){
                         md.R = (bit<16>)rnd.get();
                         // Thanks Leonardo Marques for the packet loss model contribution

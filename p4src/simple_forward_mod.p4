@@ -65,13 +65,9 @@ header arp_h {
 
 header rec_h {
 	bit<32> ts;
-	bit<32> num;
-	bit<32> jitter;
 	bit<16> sw;
 	bit<16> sw_id;
 	bit<16> ether_type;
-	bit<1> signal;
-	bit<7> pad;
 }
 
 struct headers {
