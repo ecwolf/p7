@@ -43,7 +43,12 @@ class generator:
                 self.args = parser.parse_args(args)
                 
                 self.name = name
-                self.p4_code = ''
+
+                #edit, now the p4 codes are a list
+                self.p4_code = []
+                self.sw_p4 = {}
+
+
                 self.stratum_ip = ""
                 self.name_sw = []
                 self.host = []
@@ -58,10 +63,19 @@ class generator:
                 self.rec_port_bw = ["9999", 9999]
                 self.links_rec = []
                 self.links_port_map = [] #links with ports
+                self.tofino_version = 1
+
+                #pipeline information: can be done P7, user or Traffic generator.
+                self.pipeline_0 = None
+                self.pipeline_1 = None
+                self.pipeline_2 = None
+                self.pipeline_3 = None
 
                 self.ports = {} #all ph ports
                 self.pipeline_0_ports = {} #ports from pipe 0 OBS: just ports with no host connected
                 self.pipeline_1_ports = {} #ports from pipe 1 OBS: just ports with no host connected
+                self.pipeline_2_ports = {} #ports from pipe 2 OBS: just ports with no host connected
+                self.pipeline_3_ports = {} #ports from pipe 3 OBS: just ports with no host connected
 
 
                 #Table
@@ -100,6 +114,22 @@ class generator:
         def addstratum(self, ip):
                 self.stratum_ip = ip
 
+        def definePipelines(self, pipeline_0 = None, pipeline_1 = None, pipeline_2 = None, pipeline_3 = None):
+
+                if (not (pipeline_0 == None or pipeline_0 == "p7" or pipeline_0 == "user" or pipeline_0 == "trafficGen")) or \
+                (not (pipeline_1 == None or pipeline_1 == "p7" or pipeline_1 == "user" or pipeline_1 == "trafficGen")) or \
+                (not (pipeline_2 == None or pipeline_2 == "p7" or pipeline_2 == "user" or pipeline_2 == "trafficGen")) or \
+                (not (pipeline_3 == None or pipeline_3 == "p7" or pipeline_3 == "user" or pipeline_3 == "trafficGen")):
+                        error = "ERROR: Pipeline definition error"
+                        print(error)
+                        print("Please define the pipelines as: p7, user, trafficGen or None")
+                        exit()
+
+                self.pipeline_0 = pipeline_0
+                self.pipeline_1 = pipeline_1
+                self.pipeline_2 = pipeline_2
+                self.pipeline_3 = pipeline_3
+
         def addrec_port(self, port):
                 self.rec_port = port
 
@@ -109,12 +139,21 @@ class generator:
         def addrec_port_bw(self, port, d_p):
                 self.rec_port_bw = [port, d_p]
 
-        def addswitch(self, name):
+        def addswitch(self, name, p4code):
                 self.name_sw.append(name)
                 self.sw_ids.update({name:(len(self.sw_ids))})
+                self.sw_p4[name] = p4code
                 
-        def addp4(self, p4):
-                self.p4_code = p4
+        def addp4(self, name, p4):
+                self.p4_code.append([name, p4])
+
+        def tofinoVersion(self, version):
+                if (version != 1 and version != 2):
+                        error = "ERROR: Tofino version error"
+                        print(error)
+                        print("Please define the Tofino version as 1 or 2")
+                        exit()
+                self.tofino_version = version
 
         def addhost(self, name, port, D_P, speed_bps, AU, FEC, vlan, ip):
                 if not self.ports:
@@ -223,10 +262,36 @@ class generator:
                                                                 self.pipeline_0_ports[port] = dp_val
                                                         elif 128 <= dp_val <= 191:
                                                                 self.pipeline_1_ports[port] = dp_val
+                                                        elif 256 <= dp_val <= 319:
+                                                                self.pipeline_2_ports[port] = dp_val
+                                                        elif 384 <= dp_val <= 447:
+                                                                self.pipeline_3_ports[port] = dp_val
 
                 print(self.pipeline_1_ports)
                 print(self.pipeline_0_ports)
 
+
+        #Verification of some definitions, to avoid dumb users mistakes
+        def verifier(self):
+                if self.routing_model == 2:
+                        print("\n---Verifying topologie definitions...")
+
+                        #verify if P7 was defined at least for one pipeline
+                        if not (self.pipeline_0 == "p7" or self.pipeline_1 == "p7" or self.pipeline_2 == "p7" or self.pipeline_3 == "p7"):
+                                print("ERROR: You need to define at least one pipeline as 'p7'")
+                                exit()
+                        if not (self.pipeline_0 == "user" or self.pipeline_1 == "user" or self.pipeline_2 == "user" or self.pipeline_3 == "user"):
+                                print("ERROR: You need to define at least one pipeline as 'user'")
+                                exit()
+
+                        #verify if the user defined switches with valid p4 codes
+                        for sw in self.name_sw:
+                                if self.sw_p4[sw] not in [p4file for (p4file, _) in self.p4_code]:
+                                        print("ERROR: You need to define a valid p4 code for switch %s" % sw)
+                                        exit()
+
+                        print("\n---Verification completed---")
+                        print("P7 defined for pipelines: %s, %s, %s, %s" % (self.pipeline_0, self.pipeline_1, self.pipeline_2, self.pipeline_3))
 
         def addaction(self, name):
                 self.action_name.append(name)
@@ -302,7 +367,7 @@ class generator:
                             print("port: %s (ID: %s) \n\tspeed: %s \n\tAU: %s \n\tFEC: %s" %(self.vlan_port[i][0],self.vlan_port[i][1],self.vlan_port[i][2],self.vlan_port[i][3],self.vlan_port[i][4]))
 
                 print("\nGenrating Ports Config...")
-                self.links_port_map = generate_port(self.host, self.link, self.vlan_port, self.rec_port_bw, self.pipeline_0_ports, self.pipeline_1_ports)
+                self.links_port_map = generate_port(self.host, self.link, self.vlan_port, self.rec_port_bw, self.pipeline_0_ports, self.pipeline_1_ports, self.pipeline_2_ports, self.pipeline_3_ports)
 
                 #print(self.pipeline_0_ports)
                 #print(self.pipeline_1_ports)
@@ -365,7 +430,7 @@ class generator:
 
                 generate_bf(self.host, self.vlan_link, self.tableEnt, self.tableinfo, self.sw_ids, self.p4_code, self.mirrorinfo, self.link,
                             self.routing_model, self.route_ids, self.edge_links, self.route_seq, self.link_seq, self.route_dest, self.edge_hosts, self.name_sw, # PolKa
-                            self.slice, self.slice_number, self.slice_metric, self.links_port_map) # Slice
+                            self.slice, self.slice_number, self.slice_metric, self.links_port_map, self.sw_p4) # Slice
 
 
         def generate_p4code(self):
@@ -380,7 +445,7 @@ class generator:
 
                 generate_p4(self.rec_port, self.port_user, self.name_sw, self.host, self.link, 
                             self.routing_model, self.route_ids, self.dec_s, self.route_seq, self.edge_hosts, self.routing_crc, # PolKa
-                            self.slice, self.slice_metric) # Slice
+                            self.slice, self.slice_metric, self.tofino_version) # Slice
 
                 generate_headers(self.routing_model)
 
@@ -399,8 +464,12 @@ class generator:
 
         def parse_usercode(self):
                 print("\nParsing User P4 Code\n")
-                if (self.p4_code != ''):
-                        editP4(self.p4_code, self.rec_port, self.link, self.links_rec, self.rec_port_bw, self.routing_model)     # Recirculation bandwidth)
+                #old version
+                #if (self.p4_code != ''):
+                #        editP4(self.p4_code, self.rec_port, self.link, self.links_rec, self.rec_port_bw, self.routing_model)     # Recirculation bandwidth)
+                if self.p4_code:   # verifica se a lista não está vazia
+                        for name, p4file in self.p4_code:
+                                editP4(p4file, self.rec_port, self.link, self.links_rec, self.rec_port_bw, self.routing_model)
                 else:
                         print("\nNo P4 Code defined\n")
 
@@ -410,7 +479,7 @@ class generator:
 
         def generate_multiprogram(self):
                 print("\nGenerating multiprogram Code\n")
-                gen_multiple(self.p4_code, self.routing_model)
+                gen_multiple(self.p4_code, self.routing_model, self.tofino_version)
 
                 self.compile_p7()
 
@@ -464,7 +533,8 @@ class generator:
                 else:
                         env["POLKA"] = "0" 
 
-                p4_original = self.p4_code # file name of original user p4 code
+                #ToDo: multiple codes not solved for the final script, need to solve it
+                p4_original = self.p4_code[0][1] # file name of original user p4 code
                 p4_name = p4_original.split(".")
                 if p4_name[0].find('/') != -1:
                         p4_copy = p4_name[0].split("/")

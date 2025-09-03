@@ -14,6 +14,9 @@
  # limitations under the License.
  ################################################################################
 
+from pathlib import Path
+import re
+
 def gilbert_elliott_parameters(L, burstiness=0.5):
     if not (0 < L < 1):
         raise ValueError("L must be between 0 and 1 (exclusive).")
@@ -30,7 +33,7 @@ def gilbert_elliott_parameters(L, burstiness=0.5):
 
 def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mirror, links_metrics,
                 routing_model, route_ids, edge_links, route_seq, link_seq, route_dest, edge_hosts, name_sw,
-                slice_list, slice_number, slice_metric, links_port_map):
+                slice_list, slice_number, slice_metric, links_port_map, sw_p4):
     links = []
     
     for j in range(len(hosts)):
@@ -60,22 +63,47 @@ def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mir
             default_slice_group.append(i)
 
 
+    #f = open("./files/bfrtTeste.py", "w")
     f = open("./files/bfrt.py", "w")
 
-    user_p4 = user_code.split('/')
-    p4 = user_p4[-1].split('.')
+
+    #old, changed for a list of p4codes
+    #user_p4 = user_code.split('/')
+    #p4 = user_p4[-1].split('.')
+
+    #new version, acting as a list
+    user_codes = user_code if isinstance(user_code, (list, tuple)) else [user_code]
+
+    p4 = []
+    for entry in user_codes:
+        # se entry for [name, p4file], pegamos só o p4file
+        code = entry[1] if isinstance(entry, (list, tuple)) else entry
+
+        stem = Path(code).stem            # ex: "meu_prog"
+        safe = re.sub(r'\W+', '_', stem)  # substitui não-alfanuméricos por "_"
+        p4.append(safe)
 
     f.write("from netaddr import IPAddress\n")
     if (routing_model == 0 or routing_model == 2):
         f.write("p4p7 = bfrt.p7_default.pipe_p7\n")
     if (routing_model == 1):
         f.write("p4p7 = bfrt.p7_polka.pipe_p7\n")
-    f.write("p4user = bfrt." + p4[0] + "_mod" +"." + "pipe" + "\n") # UPDATE TO USER PIPELINE
+
+    #old   
+    #f.write("p4user = bfrt." + p4[0] + "_mod" +"." + "pipe" + "\n") # UPDATE TO USER PIPELINE
+    #new
+    for idx, name in enumerate(p4):
+        # Result: p4user0 = bfrt.<name>_mod.pipe
+        f.write(f"p4user{idx} = bfrt.{name}_mod.pipe\n")
+
+
     f.write("p4mirror = bfrt.mirror\n")
     f.write("\n")
     f.write("def clear_all(verbose=True, batching=True):\n")
     f.write("    global p4p7\n")
-    f.write("    global p4user\n")
+    #f.write("    global p4user\n")
+    for idx, name in enumerate(p4):
+        f.write(f"    global p4user{idx}\n")
     f.write("    global bfrt\n")
     f.write("\n")
     f.write("    for table_types in (['MATCH_DIRECT', 'MATCH_INDIRECT_SELECTOR'],\n")
@@ -89,15 +117,27 @@ def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mir
     f.write("                table['node'].clear(batch=batching)\n")
     f.write("                if verbose:\n")
     f.write("                    print('Done')\n")
-    f.write("        for table in p4user.info(return_info=True, print_info=False):\n")
-    f.write("            if table['type'] in table_types:\n")
-    f.write("                if verbose:\n")
-    f.write("                    print(\"Clearing table {:<40} ... \".\n")
-    f.write("                          format(table['full_name']), end='', flush=True)\n")
-    f.write("                table['node'].clear(batch=batching)\n")
-    f.write("                if verbose:\n")
-    f.write("                    print('Done')\n")
-    f.write("\n")
+    #old
+    #f.write("        for table in p4user.info(return_info=True, print_info=False):\n")
+    #f.write("            if table['type'] in table_types:\n")
+    #f.write("                if verbose:\n")
+    #f.write("                    print(\"Clearing table {:<40} ... \".\n")
+    #f.write("                          format(table['full_name']), end='', flush=True)\n")
+    #f.write("                table['node'].clear(batch=batching)\n")
+    #f.write("                if verbose:\n")
+    #f.write("                    print('Done')\n")
+    #f.write("\n")
+    #new
+    for idx, name in enumerate(p4):
+        f.write(f"        for table in p4user{idx}.info(return_info=True, print_info=False):\n")
+        f.write("            if table['type'] in table_types:\n")
+        f.write("                if verbose:\n")
+        f.write("                    print(\"Clearing table {:<40} ... \".\n")
+        f.write("                          format(table['full_name']), end='', flush=True)\n")
+        f.write("                table['node'].clear(batch=batching)\n")
+        f.write("                if verbose:\n")
+        f.write("                    print('Done')\n")
+        f.write("\n")
     f.write("clear_all(verbose=True)\n")
     f.write("\n")
 
@@ -336,7 +376,12 @@ def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mir
         table_list.append(table[1]) 
         switch = swith_id[usertables[i][0][0][0]]
         action = usertables[i][1][0].split('.')
-        f.write(table[1] + " = p4user." + table[0] + "." + table[1] + "\n")
+
+        #trying to get the p4 used according to the switch name
+        p4_used = sw_p4[usertables[i][0][0][0]]
+        index_found = next((i for i, (p4, _) in enumerate(user_codes) if p4 == p4_used), None)
+
+        f.write(table[1] + " = p4user" + str(index_found) + "." + table[0] + "." + table[1] + "\n")
         match = "sw_id= " + str(switch) + ", "# Switch ID
         for j in range(len(usertables[i][2])):
             if j == 0:

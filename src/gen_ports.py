@@ -63,15 +63,89 @@ def alocar_porta(ports_dict, usados, usado_por_prefixo, bw):
     return None
 
 
+def alocar_porta_v2(ports_dict, usados, usado_por_prefixo, bw):
+    """
+    Aloca uma porta/canal respeitando:
+      - > 50 Gbps: precisa dos 4 canais (0,1,2,3) da MESMA porta livres.
+      - 25 < bw <= 50 Gbps: precisa de um PAR {0,1} OU {2,3} da MESMA porta livres.
+      - bw <= 25 Gbps: qualquer canal livre.
+    Suporta portas com número variável de canais (derivado de ports_dict).
+    Mantém compatibilidade com 'usados' e 'usado_por_prefixo':
+      - 'usados' recebe apenas a chave retornada (canônica) da alocação;
+      - 'usado_por_prefixo[prefixo]' recebe TODOS os canais bloqueados pela regra.
+    """
+
+    # Pré-processa canais existentes e disponíveis por prefixo,
+    # considerando 'usados' e reservas em 'usado_por_prefixo'.
+    canais_existentes_por_prefixo = {}
+    for chave in ports_dict.keys():
+        prefixo, canal = chave.split("/")
+        canais_existentes_por_prefixo.setdefault(prefixo, set()).add(canal)
+
+    def canais_disponiveis(prefixo):
+        bloqueados = usado_por_prefixo.get(prefixo, set())
+        disp = set()
+        for canal in canais_existentes_por_prefixo.get(prefixo, set()):
+            chave = f"{prefixo}/{canal}"
+            if chave in usados:
+                continue
+            if canal in bloqueados:
+                continue
+            disp.add(canal)
+        return disp
+
+    # Regra 1: > 50 Gbps — requer {0,1,2,3} livres e existentes
+    if bw > 50_000_000_000:
+        required = {"0", "1", "2", "3"}
+        for prefixo, existentes in canais_existentes_por_prefixo.items():
+            # porta precisa TER os 4 canais
+            if not required.issubset(existentes):
+                continue
+            disp = canais_disponiveis(prefixo)
+            if required.issubset(disp):
+                # Aloca de forma canônica retornando prefixo/0 e bloqueia os 4
+                chave = f"{prefixo}/0"
+                usados.add(chave)
+                usado_por_prefixo[prefixo] = set(usado_por_prefixo.get(prefixo, set())) | required
+                return chave
+        return None
+
+    # Regra 2: 25 < bw <= 50 Gbps — requer par {0,1} OU {2,3} livres e existentes
+    if bw > 25_000_000_000:
+        pares = [({"0", "1"}, "0"), ({"2", "3"}, "2")]  # (conjunto_do_par, canal_de_retorno)
+        for prefixo, existentes in canais_existentes_por_prefixo.items():
+            disp = canais_disponiveis(prefixo)
+            # Se já há bloqueios, eles são respeitados por 'canais_disponiveis'
+            for par, canal_retorno in pares:
+                if par.issubset(existentes) and par.issubset(disp):
+                    # bloquear AMBOS canais do par
+                    chave = f"{prefixo}/{canal_retorno}"
+                    usados.add(chave)
+                    usado_por_prefixo.setdefault(prefixo, set()).update(par)
+                    return chave
+        return None
+
+    # Regra 3: <= 25 Gbps — qualquer canal livre (inclusive portas de 1 canal)
+    for prefixo in canais_existentes_por_prefixo.keys():
+        disp = sorted(canais_disponiveis(prefixo), key=lambda x: int(x) if x.isdigit() else x)
+        if disp:
+            canal = disp[0]
+            chave = f"{prefixo}/{canal}"
+            usados.add(chave)
+            usado_por_prefixo.setdefault(prefixo, set()).add(canal)
+            return chave
+
+    return None
 
 
 
 
-def generate_port(hosts, links, vlans, rec_bw, ports_pipe0, ports_pipe1):
+
+def generate_port(hosts, links, vlans, rec_bw, ports_pipe0, ports_pipe1, ports_pipe2, ports_pipe3):
 	
 
 	#testing
-
+    #ToDo Finalize
 	# Conjunto para marcar portas ocupadas em cada pipe
 	usados_pipe0 = set()
 	usados_pipe1 = set()
@@ -83,12 +157,12 @@ def generate_port(hosts, links, vlans, rec_bw, ports_pipe0, ports_pipe1):
 	links_port_map = []
 
 
-
+	print("Port mapping new version")
 	#Creating the pairs of loopback ports for each link
 	links_port_map = []
 	for i in range(len(links)):
-		chave0 = alocar_porta(ports_pipe0, usados_pipe0, usado_por_prefixo_pipe0, links[i][2])
-		chave1 = alocar_porta(ports_pipe1, usados_pipe1, usado_por_prefixo_pipe1, links[i][2])
+		chave0 = alocar_porta_v2(ports_pipe0, usados_pipe0, usado_por_prefixo_pipe0, links[i][2])
+		chave1 = alocar_porta_v2(ports_pipe1, usados_pipe1, usado_por_prefixo_pipe1, links[i][2])
 
 		if chave0 is None or chave1 is None:
 			print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")

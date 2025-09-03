@@ -18,7 +18,7 @@ import datetime
 
 def generate_p4(rec_port, port_user, name_sw, hosts, links,
 				routing_model, route_ids, dec_s, route_seq, edge_hosts, crc,
-				slice_list, slice_metric):
+				slice_list, slice_metric, tofino_model):
 	
 	current_year = datetime.datetime.now().year
 
@@ -54,7 +54,10 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 	f.write("\n")
 	
 	# Libraries
-	f.write("#include <tna.p4>\n")
+	if (tofino_model == 1):
+		f.write("#include <tna.p4>\n")
+	elif (tofino_model == 2):
+		f.write("#include <t2na.p4>\n")	
 	f.write("\n")
 	f.write("#include \"common/headers.p4\"\n")
 	f.write("#include \"common/util.p4\"\n")
