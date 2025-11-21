@@ -43,46 +43,46 @@ arp_fwd = p4p7.SwitchIngress.arp_fwd
 arp_fwd.add_with_match_arp(vid=1920, ingress_port=172,   link=13, portRec=136)
 
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=0, sw_id=222, sw_id_next=0, portPipe=56)
+basic_fwd.add_with_send_next(sw=0, sw_id=222, sw_id_next=0, portPipe=56, register_shift=0)
 basic_fwd.add_with_send(sw=0, sw_id=0, port=164)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=1, sw_id=1, sw_id_next=0, portPipe=48)
-basic_fwd.add_with_send_next(sw=1, sw_id=0, sw_id_next=1, portPipe=48)
+basic_fwd.add_with_send_next(sw=1, sw_id=1, sw_id_next=0, portPipe=48, register_shift=0)
+basic_fwd.add_with_send_next(sw=1, sw_id=0, sw_id_next=1, portPipe=48, register_shift=1000)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=2, sw_id=2, sw_id_next=1, portPipe=40)
-basic_fwd.add_with_send_next(sw=2, sw_id=1, sw_id_next=2, portPipe=40)
+basic_fwd.add_with_send_next(sw=2, sw_id=2, sw_id_next=1, portPipe=40, register_shift=1000)
+basic_fwd.add_with_send_next(sw=2, sw_id=1, sw_id_next=2, portPipe=40, register_shift=2000)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=3, sw_id=3, sw_id_next=2, portPipe=32)
-basic_fwd.add_with_send_next(sw=3, sw_id=2, sw_id_next=3, portPipe=32)
+basic_fwd.add_with_send_next(sw=3, sw_id=3, sw_id_next=2, portPipe=32, register_shift=2000)
+basic_fwd.add_with_send_next(sw=3, sw_id=2, sw_id_next=3, portPipe=32, register_shift=3000)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=4, sw_id=4, sw_id_next=3, portPipe=24)
-basic_fwd.add_with_send_next(sw=4, sw_id=3, sw_id_next=4, portPipe=24)
+basic_fwd.add_with_send_next(sw=4, sw_id=4, sw_id_next=3, portPipe=24, register_shift=3000)
+basic_fwd.add_with_send_next(sw=4, sw_id=3, sw_id_next=4, portPipe=24, register_shift=4000)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=5, sw_id=5, sw_id_next=4, portPipe=16)
-basic_fwd.add_with_send_next(sw=5, sw_id=4, sw_id_next=5, portPipe=16)
+basic_fwd.add_with_send_next(sw=5, sw_id=5, sw_id_next=4, portPipe=16, register_shift=4000)
+basic_fwd.add_with_send_next(sw=5, sw_id=4, sw_id_next=5, portPipe=16, register_shift=5000)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=6, sw_id=6, sw_id_next=5, portPipe=8)
-basic_fwd.add_with_send_next(sw=6, sw_id=5, sw_id_next=6, portPipe=8)
+basic_fwd.add_with_send_next(sw=6, sw_id=6, sw_id_next=5, portPipe=8, register_shift=5000)
+basic_fwd.add_with_send_next(sw=6, sw_id=5, sw_id_next=6, portPipe=8, register_shift=6000)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=7, sw_id=7, sw_id_next=6, portPipe=0)
-basic_fwd.add_with_send_next(sw=7, sw_id=6, sw_id_next=7, portPipe=0)
+basic_fwd.add_with_send_next(sw=7, sw_id=7, sw_id_next=6, portPipe=0, register_shift=6000)
+basic_fwd.add_with_send_next(sw=7, sw_id=6, sw_id_next=7, portPipe=0, register_shift=7000)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=8, sw_id=8, sw_id_next=7, portPipe=4)
-basic_fwd.add_with_send_next(sw=8, sw_id=7, sw_id_next=8, portPipe=4)
+basic_fwd.add_with_send_next(sw=8, sw_id=8, sw_id_next=7, portPipe=4, register_shift=7000)
+basic_fwd.add_with_send_next(sw=8, sw_id=7, sw_id_next=8, portPipe=4, register_shift=8000)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=9, sw_id=9, sw_id_next=8, portPipe=12)
-basic_fwd.add_with_send_next(sw=9, sw_id=8, sw_id_next=9, portPipe=12)
+basic_fwd.add_with_send_next(sw=9, sw_id=9, sw_id_next=8, portPipe=12, register_shift=8000)
+basic_fwd.add_with_send_next(sw=9, sw_id=8, sw_id_next=9, portPipe=12, register_shift=9000)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=10, sw_id=10, sw_id_next=9, portPipe=20)
-basic_fwd.add_with_send_next(sw=10, sw_id=9, sw_id_next=10, portPipe=20)
+basic_fwd.add_with_send_next(sw=10, sw_id=10, sw_id_next=9, portPipe=20, register_shift=9000)
+basic_fwd.add_with_send_next(sw=10, sw_id=9, sw_id_next=10, portPipe=20, register_shift=10000)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=11, sw_id=11, sw_id_next=10, portPipe=28)
-basic_fwd.add_with_send_next(sw=11, sw_id=10, sw_id_next=11, portPipe=28)
+basic_fwd.add_with_send_next(sw=11, sw_id=11, sw_id_next=10, portPipe=28, register_shift=10000)
+basic_fwd.add_with_send_next(sw=11, sw_id=10, sw_id_next=11, portPipe=28, register_shift=11000)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=12, sw_id=12, sw_id_next=11, portPipe=36)
-basic_fwd.add_with_send_next(sw=12, sw_id=11, sw_id_next=12, portPipe=36)
+basic_fwd.add_with_send_next(sw=12, sw_id=12, sw_id_next=11, portPipe=36, register_shift=11000)
+basic_fwd.add_with_send_next(sw=12, sw_id=11, sw_id_next=12, portPipe=36, register_shift=12000)
 basic_fwd = p4p7.SwitchIngress.basic_fwd
-basic_fwd.add_with_send_next(sw=13, sw_id=222, sw_id_next=12, portPipe=44)
+basic_fwd.add_with_send_next(sw=13, sw_id=222, sw_id_next=12, portPipe=44, register_shift=12000)
 basic_fwd.add_with_send(sw=13, sw_id=12, port=172)
 
 tscal = p4p7.SwitchIngress.tscal

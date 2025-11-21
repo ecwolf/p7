@@ -33,7 +33,7 @@ def gilbert_elliott_parameters(L, burstiness=0.5):
 
 def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mirror, links_metrics,
                 routing_model, route_ids, edge_links, route_seq, link_seq, route_dest, edge_hosts, name_sw,
-                slice_list, slice_number, slice_metric, links_port_map, sw_p4):
+                slice_list, slice_number, slice_metric, links_port_map, sw_p4, registerMaxSize):
     links = []
     
     for j in range(len(hosts)):
@@ -182,19 +182,32 @@ def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code, mir
             f.write("basic_fwd = p4p7.SwitchIngress.basic_fwd\n")
 
             for h in hosts:
+
                 if link[0] == h[0]:
-                    f.write("basic_fwd.add_with_send_next(sw=" + str(i) + ", sw_id=222, sw_id_next="+ str(swith_id[link[1]]) + ", portPipe=" + str(link[4]) + ")\n")
+                    sw_id_next = swith_id[link[1]]
+                    register_index = sw_id_next * registerMaxSize if sw_id_next != 0 else 0
+                    f.write("basic_fwd.add_with_send_next(sw=" + str(i) + ", sw_id=222, sw_id_next="+ str(swith_id[link[1]]) + ", portPipe=" + str(link[4]) +
+                ", register_shift=" + str(register_index) + ")\n")
                     f.write("basic_fwd.add_with_send(sw=" + str(i) + ", sw_id=" + str(swith_id[link[1]])+", port="+str(h[2]) + ")\n")
                 elif link[1] == h[0]:
-                    f.write("basic_fwd.add_with_send_next(sw=" + str(i) + ", sw_id=222, sw_id_next="+ str(swith_id[link[0]]) + ", portPipe=" + str(link[4]) + ")\n")
+                    sw_id_next = swith_id[link[0]]
+                    register_index = sw_id_next * registerMaxSize if sw_id_next != 0 else 0
+                    f.write("basic_fwd.add_with_send_next(sw=" + str(i) + ", sw_id=222, sw_id_next="+ str(swith_id[link[0]]) + ", portPipe=" + str(link[4]) +
+                ", register_shift=" + str(register_index) + ")\n")
                     f.write("basic_fwd.add_with_send(sw=" + str(i) + ", sw_id=" + str(swith_id[link[0]])+", port="+str(h[2]) + ")\n")
-                    
+         
 
             
             if  any(((link[0]==h[0]) or (link[1]==h[0])) for h in hosts) == False:
-                f.write("basic_fwd.add_with_send_next(sw=" + str(i) + ", sw_id="+ str(swith_id[link[1]])+", sw_id_next="+ str(swith_id[link[0]]) + ", portPipe=" + str(link[4]) + ")\n")            
-                f.write("basic_fwd.add_with_send_next(sw=" + str(i) + ", sw_id="+ str(swith_id[link[0]])+", sw_id_next="+ str(swith_id[link[1]]) + ", portPipe=" + str(link[4]) + ")\n")           
-                
+                sw_id_next = swith_id[link[0]]
+                register_index = sw_id_next * registerMaxSize if sw_id_next != 0 else 0
+
+                f.write("basic_fwd.add_with_send_next(sw=" + str(i) + ", sw_id="+ str(swith_id[link[1]])+", sw_id_next="+ str(swith_id[link[0]]) + ", portPipe=" + str(link[4]) +
+                ", register_shift=" + str(register_index) + ")\n")            
+                sw_id_next = swith_id[link[1]]
+                register_index = sw_id_next * registerMaxSize if sw_id_next != 0 else 0
+                f.write("basic_fwd.add_with_send_next(sw=" + str(i) + ", sw_id="+ str(swith_id[link[0]])+", sw_id_next="+ str(swith_id[link[1]]) + ", portPipe=" + str(link[4]) +
+                ", register_shift=" + str(register_index) + ")\n")                           
             #f.write("basic_fwd.add_with_send_next
 
 

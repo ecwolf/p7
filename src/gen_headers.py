@@ -62,6 +62,7 @@ def generate_headers(routing_model):
         f.write("    bit<16> sw;\n")
         f.write("    bit<16> sw_id;\n")
         f.write("    bit<16> ether_type;\n")
+        f.write("    bit<32> register_shift;\n")
         f.write("}\n\n")
     else:
         f.write("//original\n")

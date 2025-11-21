@@ -239,11 +239,12 @@ control SwitchIngress(
     // Send packet to the next internal switch 
     // Reset the initial timestamp
     // Increase the ID of the switch
-    action send_next(bit<16> sw_id_next, bit<9> portPipe) {
+    action send_next(bit<16> sw_id_next, bit<9> portPipe, bit<32> register_shift) {
         // User routing
         hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];
 
         hdr.rec.sw_id = sw_id_next;
+        hdr.rec.register_shift = register_shift;
 
         ig_intr_tm_md.ucast_egress_port = portPipe;
     }

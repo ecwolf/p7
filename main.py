@@ -39,6 +39,9 @@ topo.definePipelines("p1", "spine")
 
 #topo.definePipelines("spine", "p1")
 
+#testing register shift
+topo.defineRegisterMaxSize(1000)
+
 topo.addp4("p1", "p4src/simple_forward.p4")
 
 topo.routing(2) #type for user defined routing, 0 for default routing

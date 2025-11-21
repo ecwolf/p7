@@ -46,6 +46,7 @@ header rec_h {
     bit<16> sw;
     bit<16> sw_id;
     bit<16> ether_type;
+    bit<32> register_shift;
 }
 
 header vlan_tag_h {

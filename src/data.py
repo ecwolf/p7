@@ -77,6 +77,8 @@ class generator:
                 self.pipeline_2_ports = {} #ports from pipe 2 OBS: just ports with no host connected
                 self.pipeline_3_ports = {} #ports from pipe 3 OBS: just ports with no host connected
 
+                #Registers
+                self.registerMaxSize = 0
 
                 #Table
                 self.table_name = []
@@ -114,6 +116,9 @@ class generator:
         def addstratum(self, ip):
                 self.stratum_ip = ip
 
+        def defineRegisterMaxSize(self, maxSize = 0):
+                self.registerMaxSize = maxSize
+        
         def definePipelines(self, pipeline_0 = None, pipeline_1 = None, pipeline_2 = None, pipeline_3 = None):
 
                 #if (not (pipeline_0 == None or pipeline_0 == "spine" or pipeline_0 == "user" or pipeline_0 == "trafficGen")) or \
@@ -430,7 +435,7 @@ class generator:
 
                 generate_bf(self.host, self.vlan_link, self.tableEnt, self.tableinfo, self.sw_ids, self.p4_code, self.mirrorinfo, self.link,
                             self.routing_model, self.route_ids, self.edge_links, self.route_seq, self.link_seq, self.route_dest, self.edge_hosts, self.name_sw, # PolKa
-                            self.slice, self.slice_number, self.slice_metric, self.links_port_map, self.sw_p4) # Slice
+                            self.slice, self.slice_number, self.slice_metric, self.links_port_map, self.sw_p4, self.registerMaxSize) # Slice
 
 
         def generate_p4code(self):

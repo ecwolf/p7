@@ -386,7 +386,7 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 			f.write("        md.diff = (bit<16>) hdr.rec.routeid;\n")
 		f.write("\n")
 	if (routing_model == 2):
-		f.write("    action send_next(bit<16> sw_id_next, bit<9> portPipe) {\n")
+		f.write("    action send_next(bit<16> sw_id_next, bit<9> portPipe, bit<32> register_shift) {\n")
 		f.write("        // User routing\n")
 	f.write("        hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];\n")
 	#f.write("        hdr.rec.num = 1;\n")
@@ -396,6 +396,7 @@ def generate_p4(rec_port, port_user, name_sw, hosts, links,
 
 	if (routing_model == 2):
 		f.write("        hdr.rec.sw_id = sw_id_next;\n")
+		f.write("        hdr.rec.register_shift = register_shift;\n")
 	else:			
 		f.write("        hdr.rec.sw_id = sw_id;\n")
 	f.write("\n")
