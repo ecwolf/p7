@@ -34,7 +34,10 @@ topo.addports_file("portConfigs.txt")
 topo.tofinoVersion(1) #default is 1
 
 
-topo.definePipelines("user", "p7")
+#topo.definePipelines("p1", "spine", "p1", "spine")
+topo.definePipelines("p1", "spine")
+
+#topo.definePipelines("spine", "p1")
 
 topo.addp4("p1", "p4src/simple_forward.p4")
 

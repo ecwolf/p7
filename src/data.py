@@ -116,14 +116,14 @@ class generator:
 
         def definePipelines(self, pipeline_0 = None, pipeline_1 = None, pipeline_2 = None, pipeline_3 = None):
 
-                if (not (pipeline_0 == None or pipeline_0 == "p7" or pipeline_0 == "user" or pipeline_0 == "trafficGen")) or \
-                (not (pipeline_1 == None or pipeline_1 == "p7" or pipeline_1 == "user" or pipeline_1 == "trafficGen")) or \
-                (not (pipeline_2 == None or pipeline_2 == "p7" or pipeline_2 == "user" or pipeline_2 == "trafficGen")) or \
-                (not (pipeline_3 == None or pipeline_3 == "p7" or pipeline_3 == "user" or pipeline_3 == "trafficGen")):
-                        error = "ERROR: Pipeline definition error"
-                        print(error)
-                        print("Please define the pipelines as: p7, user, trafficGen or None")
-                        exit()
+                #if (not (pipeline_0 == None or pipeline_0 == "spine" or pipeline_0 == "user" or pipeline_0 == "trafficGen")) or \
+                #(not (pipeline_1 == None or pipeline_1 == "spine" or pipeline_1 == "user" or pipeline_1 == "trafficGen")) or \
+                #(not (pipeline_2 == None or pipeline_2 == "spine" or pipeline_2 == "user" or pipeline_2 == "trafficGen")) or \
+                #(not (pipeline_3 == None or pipeline_3 == "spine" or pipeline_3 == "user" or pipeline_3 == "trafficGen")):
+                #        error = "ERROR: Pipeline definition error"
+                #        print(error)
+                #        print("Please define the pipelines as: spine, user, trafficGen or None")
+                #        exit()
 
                 self.pipeline_0 = pipeline_0
                 self.pipeline_1 = pipeline_1
@@ -275,14 +275,14 @@ class generator:
         def verifier(self):
                 if self.routing_model == 2:
                         print("\n---Verifying topologie definitions...")
-
+                        #ToDo Improve the user verification, check if the user defined the p4 code created for one pipe
                         #verify if P7 was defined at least for one pipeline
-                        if not (self.pipeline_0 == "p7" or self.pipeline_1 == "p7" or self.pipeline_2 == "p7" or self.pipeline_3 == "p7"):
-                                print("ERROR: You need to define at least one pipeline as 'p7'")
+                        if not (self.pipeline_0 == "spine" or self.pipeline_1 == "spine" or self.pipeline_2 == "spine" or self.pipeline_3 == "spine"):
+                                print("ERROR: You need to define at least one pipeline as 'spine'")
                                 exit()
-                        if not (self.pipeline_0 == "user" or self.pipeline_1 == "user" or self.pipeline_2 == "user" or self.pipeline_3 == "user"):
-                                print("ERROR: You need to define at least one pipeline as 'user'")
-                                exit()
+                        #if not (self.pipeline_0 == "user" or self.pipeline_1 == "user" or self.pipeline_2 == "user" or self.pipeline_3 == "user"):
+                        #        print("ERROR: You need to define at least one pipeline as 'user'")
+                        #        exit()
 
                         #verify if the user defined switches with valid p4 codes
                         for sw in self.name_sw:
@@ -291,7 +291,7 @@ class generator:
                                         exit()
 
                         print("\n---Verification completed---")
-                        print("P7 defined for pipelines: %s, %s, %s, %s" % (self.pipeline_0, self.pipeline_1, self.pipeline_2, self.pipeline_3))
+                        print("SPINE defined for pipelines: %s, %s, %s, %s" % (self.pipeline_0, self.pipeline_1, self.pipeline_2, self.pipeline_3))
 
         def addaction(self, name):
                 self.action_name.append(name)
@@ -367,7 +367,7 @@ class generator:
                             print("port: %s (ID: %s) \n\tspeed: %s \n\tAU: %s \n\tFEC: %s" %(self.vlan_port[i][0],self.vlan_port[i][1],self.vlan_port[i][2],self.vlan_port[i][3],self.vlan_port[i][4]))
 
                 print("\nGenrating Ports Config...")
-                self.links_port_map = generate_port(self.host, self.link, self.vlan_port, self.rec_port_bw, self.pipeline_0_ports, self.pipeline_1_ports, self.pipeline_2_ports, self.pipeline_3_ports)
+                self.links_port_map = generate_port(self.host, self.link, self.vlan_port, self.rec_port_bw, self.pipeline_0_ports, self.pipeline_1_ports, self.pipeline_2_ports, self.pipeline_3_ports, self.pipeline_0, self.pipeline_1, self.pipeline_2, self.pipeline_3, self.sw_p4)
 
                 #print(self.pipeline_0_ports)
                 #print(self.pipeline_1_ports)
@@ -479,7 +479,7 @@ class generator:
 
         def generate_multiprogram(self):
                 print("\nGenerating multiprogram Code\n")
-                gen_multiple(self.p4_code, self.routing_model, self.tofino_version)
+                gen_multiple(self.p4_code, self.routing_model, self.tofino_version, self.pipeline_0, self.pipeline_1, self.pipeline_2, self.pipeline_3)
 
                 self.compile_p7()
 

@@ -141,86 +141,241 @@ def alocar_porta_v2(ports_dict, usados, usado_por_prefixo, bw):
 
 
 
-def generate_port(hosts, links, vlans, rec_bw, ports_pipe0, ports_pipe1, ports_pipe2, ports_pipe3):
+def generate_port(hosts, links, vlans, rec_bw, ports_pipe0, ports_pipe1, ports_pipe2, ports_pipe3, pipeline_0, pipeline_1, pipeline_2, pipeline_3, sw_p4):
 	
 
-	#testing
+    #trying final updates
+
+    #dictionaries with available ports for each pipeline/functionality, maybe not all are used
+    usados_pipe_emulation = set()
+    usados_pipe_user0 = set()
+    usados_pipe_user1 = set()
+    usados_pipe_user2 = set()
+
+    usado_por_prefixo_pipe_emulation = {}
+    usado_por_prefixo_pipe_user0 = {}
+    usado_por_prefixo_pipe_user1 = {}
+    usado_por_prefixo_pipe_user2 = {}
+
+    ports_emulation_pipeline = {}
+    ports_user0_pipeline = {}
+    ports_user1_pipeline = {}
+    ports_user2_pipeline = {}
+
+    # dicionário para mapear cada user_code -> qual user ele ocupa
+    user_map = {}
+
+    # lista só para iterar de forma organizada
+    pipes = [
+        (pipeline_0, ports_pipe0),
+        (pipeline_1, ports_pipe1),
+        (pipeline_2, ports_pipe2),
+        (pipeline_3, ports_pipe3),
+    ]
+
+    # filling the dictionaries with available ports for each p4 code. 
+    # if the same p4 code is used in more than one pipe, the ports are added to the same dictionary
+    for pipe_name, ports in pipes:
+        if pipe_name in ("spine", None, "trafficGen"):
+            continue  # ignora
+
+        if pipe_name not in user_map:
+            # atribui o próximo user disponível
+            user_map[pipe_name] = len(user_map)
+
+        user_idx = user_map[pipe_name]
+
+        if user_idx == 0:
+            ports_user0_pipeline.update(ports)
+        elif user_idx == 1:
+            ports_user1_pipeline.update(ports)
+        elif user_idx == 2:
+            ports_user2_pipeline.update(ports)
+
+
+    #filling the ports for the emulation pipelines
+    if pipeline_0 == "spine":
+        ports_emulation_pipeline.update(ports_pipe0)
+
+    if pipeline_1 == "spine":
+        ports_emulation_pipeline.update(ports_pipe1)
+
+    if pipeline_2 == "spine":
+        ports_emulation_pipeline.update(ports_pipe2)
+
+    if pipeline_3 == "spine":
+        ports_emulation_pipeline.update(ports_pipe3)
+
+    #testing
     #ToDo Finalize
-	# Conjunto para marcar portas ocupadas em cada pipe
-	usados_pipe0 = set()
-	usados_pipe1 = set()
+    # Conjunto para marcar portas ocupadas em cada pipe
+    usados_pipe0 = set()
+    usados_pipe1 = set()
     # Para controlar prefixos e quantas portas foram usadas deles
-	usado_por_prefixo_pipe0 = {}
-	usado_por_prefixo_pipe1 = {}
+    usado_por_prefixo_pipe0 = {}
+    usado_por_prefixo_pipe1 = {}
 
     # lista de saída
-	links_port_map = []
+    links_port_map = []
 
 
-	print("Port mapping new version")
+    print("Port mapping new version")
 	#Creating the pairs of loopback ports for each link
-	links_port_map = []
-	for i in range(len(links)):
-		chave0 = alocar_porta_v2(ports_pipe0, usados_pipe0, usado_por_prefixo_pipe0, links[i][2])
-		chave1 = alocar_porta_v2(ports_pipe1, usados_pipe1, usado_por_prefixo_pipe1, links[i][2])
+    links_port_map = []
+    for i in range(len(links)):
 
-		if chave0 is None or chave1 is None:
-			print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")
-			exit()
+        #trying to find a port on the emulation pipeline
+        chave0 = alocar_porta_v2(ports_emulation_pipeline, usados_pipe_emulation, usado_por_prefixo_pipe_emulation, links[i][2])
+
+        if chave0 is None:
+                print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")
+                exit()
 
 
-		port_map_entry = [links[i][0], links[i][1], links[i][2], chave0, ports_pipe0[chave0], chave1, ports_pipe1[chave1]]
+        #trying to find a port on the user pipeline
+
+        p4_a = sw_p4.get(links[i][0])
+        p4_b = sw_p4.get(links[i][1])
+
+        # Caso (1) → os dois existem e são diferentes, so it will generate two different mappings
+        if p4_a is not None and p4_b is not None and p4_a != p4_b:
+            #ToDo: check if it is right
+            # pega o índice de usuário para cada P4
+            user_idx_a = user_map[p4_a]
+            user_idx_b = user_map[p4_b]
+
+            # aloca chave1 para o primeiro switch
+            if user_idx_a == 0:
+                chave1 = alocar_porta_v2(ports_user0_pipeline, usados_pipe_user0, usado_por_prefixo_pipe_user0, links[i][2])
+                if chave1 is None:
+                    print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")
+                    exit()
+                port_map_entry1 = [links[i][0], links[i][1], links[i][2], chave1, ports_user0_pipeline[chave1], chave0, ports_emulation_pipeline[chave0]]
+            elif user_idx_a == 1:
+                chave1 = alocar_porta_v2(ports_user1_pipeline, usados_pipe_user1, usado_por_prefixo_pipe_user1, links[i][2])
+                if chave1 is None:
+                    print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")
+                    exit()
+                port_map_entry1 = [links[i][0], links[i][1], links[i][2], chave1, ports_user1_pipeline[chave1], chave0, ports_emulation_pipeline[chave0]]
+            elif user_idx_a == 2:
+                chave1 = alocar_porta_v2(ports_user2_pipeline, usados_pipe_user2, usado_por_prefixo_pipe_user2, links[i][2])
+                if chave1 is None:
+                    print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")
+                    exit()
+                port_map_entry1 = [links[i][0], links[i][1], links[i][2], chave1, ports_user2_pipeline[chave1], chave0, ports_emulation_pipeline[chave0]]
+
+            links_port_map.append(port_map_entry1)
+
+            # aloca chave2 para o segundo switch
+            if user_idx_b == 0:
+                chave2 = alocar_porta_v2(ports_user0_pipeline, usados_pipe_user0, usado_por_prefixo_pipe_user0, links[i][2])
+                if chave2 is None:
+                    print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")
+                    exit()
+                port_map_entry2 = [links[i][0], links[i][1], links[i][2], chave2, ports_user0_pipeline[chave2], chave0, ports_emulation_pipeline[chave0]]
+            elif user_idx_b == 1:
+                chave2 = alocar_porta_v2(ports_user1_pipeline, usados_pipe_user1, usado_por_prefixo_pipe_user1, links[i][2])
+                if chave2 is None:
+                    print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")
+                    exit()
+                port_map_entry2 = [links[i][0], links[i][1], links[i][2], chave2, ports_user1_pipeline[chave2], chave0, ports_emulation_pipeline[chave0]]
+            elif user_idx_b == 2:
+                chave2 = alocar_porta_v2(ports_user2_pipeline, usados_pipe_user2, usado_por_prefixo_pipe_user2, links[i][2])
+                if chave2 is None:
+                    print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")
+                    exit()
+                port_map_entry2 = [links[i][0], links[i][1], links[i][2], chave2, ports_user2_pipeline[chave2], chave0, ports_emulation_pipeline[chave0]]
+
+            links_port_map.append(port_map_entry2)
+
+
+
+
+
+        # Case (2) → one is host or both are the same P4 code, so it will use the same mapping for both    
+        else:
+            #get the name of the p4 code used
+            p4_nome = p4_a or p4_b
+
+            user_idx = user_map[p4_nome]
+
+            if user_idx == 0:
+                chave1 = alocar_porta_v2(ports_user0_pipeline, usados_pipe_user0, usado_por_prefixo_pipe_user0, links[i][2])
+                if chave1 is None:
+                    print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")
+                    exit()
+                port_map_entry = [links[i][0], links[i][1], links[i][2], chave1, ports_user0_pipeline[chave1], chave0, ports_emulation_pipeline[chave0]]
+            elif user_idx == 1:
+                chave1 = alocar_porta_v2(ports_user1_pipeline, usados_pipe_user1, usado_por_prefixo_pipe_user1, links[i][2])
+                if chave1 is None:
+                    print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")
+                    exit()
+                port_map_entry = [links[i][0], links[i][1], links[i][2], chave1, ports_user1_pipeline[chave1], chave0, ports_emulation_pipeline[chave0]]
+            elif user_idx == 2:
+                chave1 = alocar_porta_v2(ports_user2_pipeline, usados_pipe_user2, usado_por_prefixo_pipe_user2, links[i][2])
+                if chave1 is None:
+                    print(f"⚠️ Não foi possível mapear link {links[i][0]}-{links[i][1]} com bw {links[i][2]}")
+                    exit()
+                port_map_entry = [links[i][0], links[i][1], links[i][2], chave1, ports_user2_pipeline[chave1], chave0, ports_emulation_pipeline[chave0]]
+
+
+            #port_map_entry = [links[i][0], links[i][1], links[i][2], chave0, ports_pipe0[chave0], chave1, ports_pipe1[chave1]]
 	
-		links_port_map.append(port_map_entry)
+            links_port_map.append(port_map_entry)
 
-	print(links_port_map)
+        
 
-	f = open("./files/ports_config.txt", "w")
+        #chave1 = alocar_porta_v2(ports_pipe1, usados_pipe1, usado_por_prefixo_pipe1, links[i][2])
 
-	#Acces ucli/pm
-	f.write("ucli\n")
-	f.write("pm\n")
+
+        
+
+    print(links_port_map)
+
+    f = open("./files/ports_config.txt", "w")
+
+    #Acces ucli/pm
+
+    f.write("ucli\n")
+    f.write("pm\n")
 
 	#Ports host configuration
-	for i in range(len(hosts)):
-		if hosts[i][5] == "False":
-			feec = "NONE"
-		f.write("port-add " + str(hosts[i][1]) + " " + str(int(hosts[i][3]/1000000000)) + "G" + " " + str(feec) + "\n")
-		f.write("port-enb " + str(hosts[i][1]) + "\n")
-		if hosts[i][4] == "False":
-			f.write("an-set " + str(hosts[i][1]) + " 2" + "\n")
-			f.write("port-dis " + str(hosts[i][1]) + "\n")
-			f.write("port-enb " + str(hosts[i][1]) + "\n")
+    for i in range(len(hosts)):
+        if hosts[i][5] == "False":
+            feec = "NONE"
+        f.write("port-add " + str(hosts[i][1]) + " " + str(int(hosts[i][3]/1000000000)) + "G" + " " + str(feec) + "\n")
+        f.write("port-enb " + str(hosts[i][1]) + "\n")
+        if hosts[i][4] == "False":
+            f.write("an-set " + str(hosts[i][1]) + " 2" + "\n")
+            f.write("port-dis " + str(hosts[i][1]) + "\n")
+            f.write("port-enb " + str(hosts[i][1]) + "\n")
 
 	#Ports link configuration
-	for i in range(len(links_port_map)):
-		if links_port_map[i][2] > 50000000000:
-			f.write("port-add " + str(links_port_map[i][3]) + " 100G" + " NONE\n")
-			f.write("port-loopback " + str(links_port_map[i][3]) + " mac-near\n")
-			f.write("port-enb " + str(links_port_map[i][3]) + "\n")
-			f.write("port-add " + str(links_port_map[i][5]) + " 100G" + " NONE\n")
-			f.write("port-loopback " + str(links_port_map[i][5]) + " mac-near\n")
-			f.write("port-enb " + str(links_port_map[i][5]) + "\n")
-		elif links_port_map[i][2] > 25000000000:
-			f.write("port-add " + str(links_port_map[i][3]) + " 50G" + " NONE\n")
-			f.write("port-loopback " + str(links_port_map[i][3]) + " mac-near\n")
-			f.write("port-enb " + str(links_port_map[i][3]) + "\n")
-			f.write("port-add " + str(links_port_map[i][5]) + " 50G" + " NONE\n")
-			f.write("port-loopback " + str(links_port_map[i][5]) + " mac-near\n")
-			f.write("port-enb " + str(links_port_map[i][5]) + "\n")
-		else:
-			f.write("port-add " + str(links_port_map[i][3]) + " 25G" + " NONE\n")
-			f.write("port-loopback " + str(links_port_map[i][3]) + " mac-near\n")
-			f.write("port-enb " + str(links_port_map[i][3]) + "\n")
-			f.write("port-add " + str(links_port_map[i][5]) + " 25G" + " NONE\n")
-			f.write("port-loopback " + str(links_port_map[i][5]) + " mac-near\n")
-			f.write("port-enb " + str(links_port_map[i][5]) + "\n")
+    for i in range(len(links_port_map)):
+        if links_port_map[i][2] > 50000000000:
+            f.write("port-add " + str(links_port_map[i][3]) + " 100G" + " NONE\n")
+            f.write("port-loopback " + str(links_port_map[i][3]) + " mac-near\n")
+            f.write("port-enb " + str(links_port_map[i][3]) + "\n")
+            f.write("port-add " + str(links_port_map[i][5]) + " 100G" + " NONE\n")
+            f.write("port-loopback " + str(links_port_map[i][5]) + " mac-near\n")
+            f.write("port-enb " + str(links_port_map[i][5]) + "\n")
+        elif links_port_map[i][2] > 25000000000:
+            f.write("port-add " + str(links_port_map[i][3]) + " 50G" + " NONE\n")
+            f.write("port-loopback " + str(links_port_map[i][3]) + " mac-near\n")
+            f.write("port-enb " + str(links_port_map[i][3]) + "\n")
+            f.write("port-add " + str(links_port_map[i][5]) + " 50G" + " NONE\n")
+            f.write("port-loopback " + str(links_port_map[i][5]) + " mac-near\n")
+            f.write("port-enb " + str(links_port_map[i][5]) + "\n")
+        else:
+            f.write("port-add " + str(links_port_map[i][3]) + " 25G" + " NONE\n")
+            f.write("port-loopback " + str(links_port_map[i][3]) + " mac-near\n")
+            f.write("port-enb " + str(links_port_map[i][3]) + "\n")
+            f.write("port-add " + str(links_port_map[i][5]) + " 25G" + " NONE\n")
+            f.write("port-loopback " + str(links_port_map[i][5]) + " mac-near\n")
+            f.write("port-enb " + str(links_port_map[i][5]) + "\n")
 
-	f.write("show" + "\n")
+    f.write("show" + "\n")
 
+    f.close()
 
-	
-
-	f.close()
-
-	return links_port_map
+    return links_port_map
